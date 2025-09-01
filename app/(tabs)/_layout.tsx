@@ -24,18 +24,17 @@ import * as Haptics from "expo-haptics";
 
 
 function CustomTabBar({ state, descriptors, navigation }: any) {
-  const navigateToRoute = (routeName: string) => {
-    // Add haptic feedback on Android/iOS
+  const navigateToRoute = async (routeName: string) => {
     if (Platform.OS !== 'web') {
-      Haptics.selectionAsync();
+      try { await Haptics.selectionAsync(); } catch (e) { console.warn('[Haptics] selection failed', e); }
     }
     navigation.navigate(routeName);
   };
 
-  const showTrackMenu = () => {
+  const showTrackMenu = async () => {
     // Add haptic feedback
     if (Platform.OS !== 'web') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      try { await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch (e) { console.warn('[Haptics] impact light failed', e); }
     }
     
     const trackOptions = [
@@ -54,10 +53,10 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
     Alert.alert('Track', 'What would you like to track?', buttons);
   };
 
-  const showProgressMenu = () => {
+  const showProgressMenu = async () => {
     // Add haptic feedback
     if (Platform.OS !== 'web') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      try { await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch (e) { console.warn('[Haptics] impact light failed', e); }
     }
     
     const progressOptions = [
@@ -76,10 +75,10 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
     Alert.alert('Progress', 'What would you like to view?', buttons);
   };
 
-  const showMoreMenu = () => {
+  const showMoreMenu = async () => {
     // Add haptic feedback
     if (Platform.OS !== 'web') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      try { await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch (e) { console.warn('[Haptics] impact light failed', e); }
     }
     
     const moreOptions = [
@@ -101,10 +100,10 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
     Alert.alert('More', 'What would you like to access?', buttons);
   };
 
-  const showQuickActions = () => {
+  const showQuickActions = async () => {
     // Add haptic feedback
     if (Platform.OS !== 'web') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      try { await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } catch (e) { console.warn('[Haptics] impact medium failed', e); }
     }
     
     const quickOptions = [

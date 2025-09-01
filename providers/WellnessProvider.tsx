@@ -327,7 +327,18 @@ export const [WellnessProvider, useWellness] = createContextHook(() => {
     try {
       const stored = await AsyncStorage.getItem(STORAGE_KEY);
       if (stored) {
-        const parsed = JSON.parse(stored);
+        let parsed: any = null;
+        try {
+          parsed = JSON.parse(stored);
+        } catch (e) {
+          console.warn('[WellnessProvider] Corrupted storage. Clearing...', e);
+          await AsyncStorage.removeItem(STORAGE_KEY);
+          parsed = null;
+        }
+        if (!parsed) {
+          setIsLoading(false);
+          return;
+        }
         setData({
           ...parsed,
           lastUpdated: new Date(parsed.lastUpdated),
