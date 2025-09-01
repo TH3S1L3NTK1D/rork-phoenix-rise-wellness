@@ -2,24 +2,43 @@ import React from 'react';
 
 export default function Root({ children }: { children: React.ReactNode }) {
   const swScript = `
-    try {
-      if (process.env.NODE_ENV === 'production' && typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          const swUrl = '/sw.js';
-          navigator.serviceWorker
-            .register(swUrl)
-            .then((registration) => {
-              console.log('[PWA] Service Worker registered:', registration.scope);
-              try { registration.update(); } catch (err) { console.log('[PWA] SW update skipped', err); }
-            })
-            .catch((error) => {
-              console.error('[PWA] Service Worker registration failed:', error);
-            });
-        });
+    (function(){
+      try {
+        const isProd = typeof process !== 'undefined' ? process.env.NODE_ENV === 'production' : true;
+        if (isProd && typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+          const registerSW = async () => {
+            const candidates = ['/sw.js', '/service-worker.js'];
+            for (const url of candidates) {
+              try {
+                console.log('[PWA] Probing SW URL', url);
+                const probe = await fetch(url, { cache: 'no-store' });
+                if (!probe.ok) {
+                  console.warn('[PWA] Probe failed for', url, probe.status, probe.statusText);
+                  continue;
+                }
+                const reg = await navigator.serviceWorker.register(url);
+                console.log('[PWA] Service Worker registered:', reg.scope);
+                try { await reg.update(); } catch (err) { console.log('[PWA] SW update skipped', err); }
+                return;
+              } catch (e) {
+                console.warn('[PWA] Registration attempt failed for candidate', url, e);
+              }
+            }
+            console.error('[PWA] No Service Worker could be registered. Skipping.');
+            try {
+              const regs = await navigator.serviceWorker.getRegistrations();
+              await Promise.all(regs.map(r => r.unregister()));
+              console.log('[PWA] Unregistered existing service workers');
+            } catch (uErr) {
+              console.warn('[PWA] Unregister failed', uErr);
+            }
+          };
+          window.addEventListener('load', registerSW);
+        }
+      } catch (err) {
+        console.error('[PWA] SW bootstrap error', err);
       }
-    } catch (err) {
-      console.error('[PWA] SW bootstrap error', err);
-    }
+    })();
   `;
 
   return (
