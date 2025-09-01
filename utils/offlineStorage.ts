@@ -1,4 +1,4 @@
-import { Platform } from 'react-native';
+import { Platform, PermissionsAndroid, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export interface OfflineData {
@@ -15,6 +15,25 @@ export class OfflineStorageManager {
   private readonly CACHE_PREFIX = 'phoenix_cache_';
 
   private constructor() {}
+
+  private async ensureAndroidStoragePermission(): Promise<boolean> {
+    if (Platform.OS !== 'android') return true;
+    try {
+      const perm = PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE;
+      if (!perm) return true;
+      const has = await PermissionsAndroid.check(perm);
+      if (has) return true;
+      const result = await PermissionsAndroid.request(perm);
+      const granted = result === PermissionsAndroid.RESULTS.GRANTED;
+      if (!granted) {
+        Alert.alert('Storage Permission', 'Storage permission is required for offline features.');
+      }
+      return granted;
+    } catch (e) {
+      console.log('[OfflineStorage] Permission check failed:', e);
+      return true;
+    }
+  }
 
   public static getInstance(): OfflineStorageManager {
     if (!OfflineStorageManager.instance) {
@@ -234,6 +253,8 @@ export class OfflineStorageManager {
     if (Platform.OS === 'web') {
       localStorage.setItem(key, value);
     } else {
+      const ok = await this.ensureAndroidStoragePermission();
+      if (!ok) return;
       await AsyncStorage.setItem(key, value);
     }
   }
@@ -242,6 +263,8 @@ export class OfflineStorageManager {
     if (Platform.OS === 'web') {
       return localStorage.getItem(key);
     } else {
+      const ok = await this.ensureAndroidStoragePermission();
+      if (!ok) return null;
       return await AsyncStorage.getItem(key);
     }
   }
@@ -250,6 +273,8 @@ export class OfflineStorageManager {
     if (Platform.OS === 'web') {
       localStorage.removeItem(key);
     } else {
+      const ok = await this.ensureAndroidStoragePermission();
+      if (!ok) return;
       await AsyncStorage.removeItem(key);
     }
   }
@@ -258,6 +283,8 @@ export class OfflineStorageManager {
     if (Platform.OS === 'web') {
       return Object.keys(localStorage);
     } else {
+      const ok = await this.ensureAndroidStoragePermission();
+      if (!ok) return [];
       return await AsyncStorage.getAllKeys();
     }
   }
