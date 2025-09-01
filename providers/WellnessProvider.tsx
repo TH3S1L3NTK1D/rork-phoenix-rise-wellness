@@ -236,6 +236,175 @@ interface WellnessData {
   meditation: MeditationData;
 }
 
+function isObject(val: unknown): val is Record<string, unknown> {
+  return typeof val === 'object' && val !== null;
+}
+
+function isArrayOf<T>(val: unknown, predicate: (v: unknown) => v is T): val is T[] {
+  return Array.isArray(val) && val.every(predicate);
+}
+
+function isDateLike(val: unknown): val is string | number | Date {
+  if (val instanceof Date) return true;
+  if (typeof val === 'string' || typeof val === 'number') return !Number.isNaN(new Date(val as any).getTime());
+  return false;
+}
+
+function isMeal(val: unknown): val is Meal {
+  if (!isObject(val)) return false;
+  return (
+    typeof val.id === 'string' &&
+    typeof val.type === 'string' &&
+    typeof val.name === 'string' &&
+    typeof val.calories === 'number' &&
+    typeof val.completed === 'boolean' &&
+    isDateLike(val.date)
+  );
+}
+
+function isExtendedMeal(val: unknown): val is ExtendedMeal {
+  if (!isObject(val)) return false;
+  return (
+    typeof val.id === 'string' &&
+    typeof val.type === 'string' &&
+    typeof val.name === 'string' &&
+    typeof val.calories === 'number' &&
+    typeof (val as any).protein === 'number' &&
+    typeof (val as any).carbs === 'number' &&
+    typeof (val as any).fats === 'number' &&
+    typeof (val as any).ingredients === 'string' &&
+    typeof val.completed === 'boolean' &&
+    isDateLike(val.date)
+  );
+}
+
+function isAddiction(val: unknown): val is Addiction {
+  if (!isObject(val)) return false;
+  return (
+    typeof val.id === 'string' &&
+    typeof val.name === 'string' &&
+    isDateLike(val.lastReset) &&
+    isDateLike(val.createdAt)
+  );
+}
+
+function isSupplement(val: unknown): val is Supplement {
+  if (!isObject(val)) return false;
+  return (
+    typeof val.id === 'string' &&
+    typeof val.name === 'string' &&
+    typeof val.dosage === 'string' &&
+    typeof val.time === 'string' &&
+    typeof val.takenToday === 'boolean' &&
+    Array.isArray((val as any).weeklyHistory)
+  );
+}
+
+function isGoal(val: unknown): val is Goal {
+  if (!isObject(val)) return false;
+  return (
+    typeof val.id === 'string' &&
+    typeof val.title === 'string' &&
+    typeof val.description === 'string' &&
+    typeof val.category === 'string' &&
+    isDateLike(val.targetDate)
+  );
+}
+
+function isJournalEntry(val: unknown): val is JournalEntry {
+  if (!isObject(val)) return false;
+  return (
+    typeof val.id === 'string' && typeof val.title === 'string' && typeof val.content === 'string' && isDateLike(val.date)
+  );
+}
+
+function isChatMessage(val: unknown): val is ChatMessage {
+  if (!isObject(val)) return false;
+  return typeof val.id === 'string' && typeof val.text === 'string' && typeof val.isUser === 'boolean' && isDateLike(val.timestamp);
+}
+
+function isHabitLink(val: unknown): val is HabitLink {
+  if (!isObject(val)) return false;
+  return typeof val.id === 'string' && typeof val.name === 'string' && typeof val.points === 'number' && typeof val.completed === 'boolean';
+}
+
+function isRoutine(val: unknown): val is Routine {
+  if (!isObject(val)) return false;
+  return (
+    typeof val.id === 'string' && typeof val.name === 'string' && typeof val.type === 'string' &&
+    Array.isArray((val as any).habitLinks) && (val as any).habitLinks.every(isHabitLink)
+  );
+}
+
+function isRoutineCompletion(val: unknown): val is RoutineCompletion {
+  if (!isObject(val)) return false;
+  return typeof val.id === 'string' && typeof val.routineId === 'string' && isDateLike(val.date);
+}
+
+function isVisionElement(val: unknown): val is VisionElement {
+  if (!isObject(val)) return false;
+  return typeof val.id === 'string' && typeof val.type === 'string' && typeof val.title === 'string' && typeof val.content === 'string';
+}
+
+function isVisionBoard(val: unknown): val is VisionBoard {
+  if (!isObject(val)) return false;
+  return typeof val.id === 'string' && Array.isArray((val as any).elements) && (val as any).elements.every(isVisionElement);
+}
+
+function isAffirmation(val: unknown): val is Affirmation {
+  if (!isObject(val)) return false;
+  return typeof val.id === 'string' && typeof val.text === 'string' && typeof val.isCustom === 'boolean' && typeof val.timesUsed === 'number';
+}
+
+function isVisualizationSession(val: unknown): val is VisualizationSession {
+  if (!isObject(val)) return false;
+  return typeof val.id === 'string' && typeof val.duration === 'number' && isArrayOf<string>((val as any).focusGoals, (x): x is string => typeof x === 'string');
+}
+
+function isMeditationSession(val: unknown): val is MeditationSession {
+  if (!isObject(val)) return false;
+  return typeof val.id === 'string' && typeof val.duration === 'number' && typeof (val as any).breathsCompleted === 'number' && isDateLike(val.date);
+}
+
+function isMeditationData(val: unknown): val is MeditationData {
+  if (!isObject(val)) return false;
+  return (
+    typeof (val as any).totalBreaths === 'number' &&
+    typeof (val as any).daysStreak === 'number' &&
+    Array.isArray((val as any).sessions) && (val as any).sessions.every(isMeditationSession) &&
+    typeof (val as any).todayCompleted === 'boolean'
+  );
+}
+
+function isUserProfile(val: unknown): val is UserProfile {
+  if (!isObject(val)) return false;
+  return typeof val.name === 'string' && typeof val.age === 'string' && typeof val.motivation === 'string';
+}
+
+function isWellnessData(val: unknown): val is WellnessData {
+  if (!isObject(val)) return false;
+  const v = val as any;
+  return (
+    typeof v.phoenixPoints === 'number' &&
+    isArrayOf(v.meals, isMeal) &&
+    isArrayOf(v.extendedMeals, isExtendedMeal) &&
+    isArrayOf(v.addictions, isAddiction) &&
+    isArrayOf(v.supplements, isSupplement) &&
+    isArrayOf(v.goals, isGoal) &&
+    isArrayOf(v.journalEntries, isJournalEntry) &&
+    isArrayOf(v.chatMessages, isChatMessage) &&
+    isArrayOf(v.routines, isRoutine) &&
+    isArrayOf(v.routineCompletions, isRoutineCompletion) &&
+    isUserProfile(v.userProfile) &&
+    isDateLike(v.lastUpdated) &&
+    isArrayOf(v.visionBoards, isVisionBoard) &&
+    isArrayOf(v.affirmations, isAffirmation) &&
+    isArrayOf(v.visualizationSessions, isVisualizationSession) &&
+    typeof v.visualizationStreak === 'number' &&
+    isMeditationData(v.meditation)
+  );
+}
+
 const STORAGE_KEY = "@phoenix_wellness_data";
 
 export const PRESET_THEMES: Theme[] = [
@@ -326,8 +495,9 @@ export const [WellnessProvider, useWellness] = createContextHook(() => {
   const loadData = async () => {
     try {
       const stored = await AsyncStorage.getItem(STORAGE_KEY);
+      console.log('[WellnessProvider] loadData() fetched bytes:', stored ? stored.length : 0);
       if (stored) {
-        let parsed: any = null;
+        let parsed: unknown = null;
         try {
           parsed = JSON.parse(stored);
         } catch (e) {
@@ -335,26 +505,33 @@ export const [WellnessProvider, useWellness] = createContextHook(() => {
           await AsyncStorage.removeItem(STORAGE_KEY);
           parsed = null;
         }
-        if (!parsed) {
+        if (!parsed || !isObject(parsed)) {
+          setIsLoading(false);
+          return;
+        }
+        const base = parsed as Record<string, unknown>;
+        if (!isWellnessData(base)) {
+          console.warn('[WellnessProvider] Stored data failed type checks. Resetting to defaults.');
+          await AsyncStorage.removeItem(STORAGE_KEY);
           setIsLoading(false);
           return;
         }
         setData({
-          ...parsed,
-          lastUpdated: new Date(parsed.lastUpdated),
-          meals: parsed.meals?.map((m: any) => ({ ...m, date: new Date(m.date) })) || [],
-          extendedMeals: parsed.extendedMeals?.map((m: any) => ({ ...m, date: new Date(m.date) })) || [],
-          addictions: parsed.addictions?.map((a: any) => ({
+          ...base,
+          lastUpdated: new Date(base.lastUpdated as any),
+          meals: (base.meals as any[])?.map((m: any) => ({ ...m, date: new Date(m.date) })) || [],
+          extendedMeals: (base.extendedMeals as any[])?.map((m: any) => ({ ...m, date: new Date(m.date) })) || [],
+          addictions: (base.addictions as any[])?.map((a: any) => ({
             ...a,
             lastReset: new Date(a.lastReset),
             createdAt: new Date(a.createdAt),
           })) || [],
-          supplements: parsed.supplements?.map((s: any) => ({
+          supplements: (base.supplements as any[])?.map((s: any) => ({
             ...s,
             lastTaken: s.lastTaken ? new Date(s.lastTaken) : undefined,
             weeklyHistory: s.weeklyHistory || [false, false, false, false, false, false, false],
           })) || [],
-          goals: parsed.goals?.map((g: any) => ({
+          goals: (base.goals as any[])?.map((g: any) => ({
             ...g,
             createdAt: new Date(g.createdAt),
             targetDate: new Date(g.targetDate),
@@ -364,26 +541,26 @@ export const [WellnessProvider, useWellness] = createContextHook(() => {
             measurementMethod: g.measurementMethod || '',
             priority: g.priority || 'medium',
           })) || [],
-          journalEntries: parsed.journalEntries?.map((j: any) => ({
+          journalEntries: (base.journalEntries as any[])?.map((j: any) => ({
             ...j,
             date: new Date(j.date),
           })) || [],
-          chatMessages: parsed.chatMessages?.map((c: any) => ({
+          chatMessages: (base.chatMessages as any[])?.map((c: any) => ({
             ...c,
             timestamp: new Date(c.timestamp),
           })) || [],
-          routines: parsed.routines?.map((r: any) => ({
+          routines: (base.routines as any[])?.map((r: any) => ({
             ...r,
             createdAt: new Date(r.createdAt),
             lastCompleted: r.lastCompleted ? new Date(r.lastCompleted) : undefined,
           })) || [],
-          routineCompletions: parsed.routineCompletions?.map((rc: any) => ({
+          routineCompletions: (base.routineCompletions as any[])?.map((rc: any) => ({
             ...rc,
             date: new Date(rc.date),
           })) || [],
-          userProfile: parsed.userProfile || { name: '', age: '', motivation: '' },
-          theme: parsed.theme || PRESET_THEMES[0],
-          visionBoards: parsed.visionBoards?.map((vb: any) => ({
+          userProfile: (base.userProfile as any) || { name: '', age: '', motivation: '' },
+          theme: (base.theme as any) || PRESET_THEMES[0],
+          visionBoards: (base.visionBoards as any[])?.map((vb: any) => ({
             ...vb,
             createdAt: new Date(vb.createdAt),
             lastViewed: vb.lastViewed ? new Date(vb.lastViewed) : undefined,
@@ -394,29 +571,29 @@ export const [WellnessProvider, useWellness] = createContextHook(() => {
               achievedDate: el.achievedDate ? new Date(el.achievedDate) : undefined,
             })) || [],
           })) || [],
-          affirmations: parsed.affirmations?.map((a: any) => ({
+          affirmations: (base.affirmations as any[])?.map((a: any) => ({
             ...a,
             createdAt: new Date(a.createdAt),
           })) || [],
-          visualizationSessions: parsed.visualizationSessions?.map((vs: any) => ({
+          visualizationSessions: (base.visualizationSessions as any[])?.map((vs: any) => ({
             ...vs,
             date: new Date(vs.date),
           })) || [],
-          dreamLifeScript: parsed.dreamLifeScript ? {
-            ...parsed.dreamLifeScript,
-            lastUpdated: new Date(parsed.dreamLifeScript.lastUpdated),
+          dreamLifeScript: (base as any).dreamLifeScript ? {
+            ...(base as any).dreamLifeScript,
+            lastUpdated: new Date((base as any).dreamLifeScript.lastUpdated),
           } : undefined,
-          visualizationStreak: parsed.visualizationStreak || 0,
-          lastVisualizationDate: parsed.lastVisualizationDate ? new Date(parsed.lastVisualizationDate) : undefined,
+          visualizationStreak: (base as any).visualizationStreak || 0,
+          lastVisualizationDate: (base as any).lastVisualizationDate ? new Date((base as any).lastVisualizationDate) : undefined,
           meditation: {
-            totalBreaths: parsed.meditation?.totalBreaths || 0,
-            daysStreak: parsed.meditation?.daysStreak || 0,
-            lastMeditationDate: parsed.meditation?.lastMeditationDate ? new Date(parsed.meditation.lastMeditationDate) : undefined,
-            sessions: parsed.meditation?.sessions?.map((s: any) => ({
+            totalBreaths: (base as any).meditation?.totalBreaths || 0,
+            daysStreak: (base as any).meditation?.daysStreak || 0,
+            lastMeditationDate: (base as any).meditation?.lastMeditationDate ? new Date((base as any).meditation.lastMeditationDate) : undefined,
+            sessions: (base as any).meditation?.sessions?.map((s: any) => ({
               ...s,
               date: new Date(s.date),
             })) || [],
-            todayCompleted: parsed.meditation?.todayCompleted || false,
+            todayCompleted: (base as any).meditation?.todayCompleted || false,
           },
         });
       }
@@ -429,7 +606,9 @@ export const [WellnessProvider, useWellness] = createContextHook(() => {
 
   const saveData = useCallback(async () => {
     try {
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      const serialized = JSON.stringify(data);
+      await AsyncStorage.setItem(STORAGE_KEY, serialized);
+      console.log('[WellnessProvider] saveData() bytes:', serialized.length);
     } catch (error) {
       console.error("Error saving data:", error);
     }
@@ -465,79 +644,65 @@ export const [WellnessProvider, useWellness] = createContextHook(() => {
 
   // Reset supplements daily
   useEffect(() => {
-    const now = new Date();
-    const lastUpdate = new Date(data.lastUpdated);
-    
-    if (now.toDateString() !== lastUpdate.toDateString()) {
-      // New day - reset supplements and meals
-      setData((prev) => ({
-        ...prev,
-        supplements: prev.supplements.map((s) => ({ ...s, takenToday: false })),
-        meals: prev.meals.filter(
-          (m) => new Date(m.date).toDateString() === now.toDateString()
-        ),
-        lastUpdated: now,
-      }));
+    try {
+      const now = new Date();
+      const lastUpdate = new Date(data.lastUpdated);
+      if (now.toDateString() !== lastUpdate.toDateString()) {
+        setData((prev) => ({
+          ...prev,
+          supplements: (prev.supplements ?? []).map((s) => ({ ...s, takenToday: false })),
+          meals: (prev.meals ?? []).filter(
+            (m) => new Date(m.date).toDateString() === now.toDateString()
+          ),
+          lastUpdated: now,
+        }));
+      }
+    } catch (e) {
+      console.error('[WellnessProvider] daily reset error', e);
     }
   }, [data.lastUpdated]);
 
   // Phoenix Points calculation
   const calculatePhoenixPoints = useCallback(() => {
-    let points = 0;
-    
-    // Points for completed meals
-    points += data.meals.filter((m) => m.completed).length * 10;
-    
-    // Points for addiction streaks
-    data.addictions.forEach((addiction) => {
-      const days = Math.floor(
-        (new Date().getTime() - new Date(addiction.lastReset).getTime()) /
-          (1000 * 60 * 60 * 24)
+    try {
+      let points = 0;
+      points += (data.meals ?? []).filter((m) => m.completed).length * 10;
+      (data.addictions ?? []).forEach((addiction) => {
+        const days = Math.floor(
+          (Date.now() - new Date(addiction.lastReset).getTime()) /
+            (1000 * 60 * 60 * 24)
+        );
+        points += days * 5;
+      });
+      points += (data.supplements ?? []).filter((s) => s.takenToday).length * 2;
+      points += (data.goals ?? []).filter((g) => g.completed).length * 50;
+      points += (data.journalEntries ?? []).length * 15;
+      const today = new Date().toDateString();
+      const todaysCompletions = (data.routineCompletions ?? []).filter(
+        (rc) => new Date(rc.date).toDateString() === today
       );
-      points += days * 5;
-    });
-    
-    // Points for supplements taken
-    points += data.supplements.filter((s) => s.takenToday).length * 2;
-    
-    // Points for completed goals
-    points += data.goals.filter((g) => g.completed).length * 50;
-    
-    // Points for journal entries
-    points += data.journalEntries.length * 15;
-    
-    // Points for routine completions
-    const today = new Date().toDateString();
-    const todaysCompletions = data.routineCompletions.filter(
-      (rc) => new Date(rc.date).toDateString() === today
-    );
-    todaysCompletions.forEach((completion) => {
-      const routine = data.routines.find((r) => r.id === completion.routineId);
-      if (routine) {
-        const basePoints = routine.habitLinks.reduce((sum, link) => sum + link.points, 0);
-        points += Math.floor(basePoints * (completion.completionPercentage / 100));
+      todaysCompletions.forEach((completion) => {
+        const routine = (data.routines ?? []).find((r) => r.id === completion.routineId);
+        if (routine) {
+          const basePoints = (routine.habitLinks ?? []).reduce((sum, link) => sum + link.points, 0);
+          points += Math.floor(basePoints * (completion.completionPercentage / 100));
+        }
+      });
+      points += (data.visualizationSessions ?? []).length * 5;
+      (data.visionBoards ?? []).forEach((board) => {
+        points += (board.elements ?? []).filter((el) => el.achieved).length * 25;
+      });
+      points += (data.visualizationStreak ?? 0) * 3;
+      points += (data.meditation.sessions ?? []).length * 5;
+      points += (data.meditation.daysStreak ?? 0) * 2;
+      if (data.meditation.todayCompleted) {
+        points += 10;
       }
-    });
-    
-    // Points for visualization sessions
-    points += data.visualizationSessions.length * 5;
-    
-    // Points for achieved vision elements
-    data.visionBoards.forEach((board) => {
-      points += board.elements.filter((el) => el.achieved).length * 25;
-    });
-    
-    // Points for visualization streak
-    points += data.visualizationStreak * 3;
-    
-    // Points for meditation
-    points += data.meditation.sessions.length * 5;
-    points += data.meditation.daysStreak * 2;
-    if (data.meditation.todayCompleted) {
-      points += 10;
+      return points;
+    } catch (e) {
+      console.error('[WellnessProvider] calculatePhoenixPoints error', e);
+      return 0;
     }
-    
-    return points;
   }, [data]);
 
   const phoenixPoints = useMemo(() => calculatePhoenixPoints(), [calculatePhoenixPoints]);
@@ -1077,14 +1242,24 @@ export const [WellnessProvider, useWellness] = createContextHook(() => {
 
   // Calculate today's stats
   const todaysMeals = useMemo(() => {
-    const today = new Date().toDateString();
-    return data.meals.filter(
-      (m) => new Date(m.date).toDateString() === today && m.completed
-    ).length;
+    try {
+      const today = new Date().toDateString();
+      return (data.meals ?? []).filter(
+        (m) => new Date(m.date).toDateString() === today && m.completed
+      ).length;
+    } catch (e) {
+      console.error('[WellnessProvider] todaysMeals error', e);
+      return 0;
+    }
   }, [data.meals]);
 
   const todaysSupplements = useMemo(() => {
-    return data.supplements.filter((s) => s.takenToday).length;
+    try {
+      return (data.supplements ?? []).filter((s) => s.takenToday).length;
+    } catch (e) {
+      console.error('[WellnessProvider] todaysSupplements error', e);
+      return 0;
+    }
   }, [data.supplements]);
 
   return useMemo(() => ({
