@@ -1,0 +1,1241 @@
+import { useState, useEffect, useMemo, useCallback } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import createContextHook from "@nkzw/create-context-hook";
+import { Platform } from "react-native";
+
+interface Meal {
+  id: string;
+  type: "breakfast" | "lunch" | "dinner" | "snack";
+  name: string;
+  calories: number;
+  completed: boolean;
+  date: Date;
+}
+
+interface ExtendedMeal {
+  id: string;
+  type: "breakfast" | "lunch" | "dinner" | "snack";
+  name: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fats: number;
+  ingredients: string;
+  completed: boolean;
+  date: Date;
+}
+
+interface Addiction {
+  id: string;
+  name: string;
+  lastReset: Date;
+  createdAt: Date;
+}
+
+interface Supplement {
+  id: string;
+  name: string;
+  dosage: string;
+  time: "morning" | "afternoon" | "evening";
+  brand?: string;
+  notes?: string;
+  reminderTime?: string;
+  takenToday: boolean;
+  lastTaken?: Date;
+  weeklyHistory: boolean[];
+}
+
+interface Goal {
+  id: string;
+  title: string;
+  description: string;
+  category: "health" | "fitness" | "nutrition" | "mental" | "career" | "personal";
+  targetDate: Date;
+  measurementMethod: string;
+  priority: "low" | "medium" | "high";
+  milestones: string[];
+  progress: number;
+  completed: boolean;
+  completedAt?: Date;
+  createdAt: Date;
+}
+
+interface JournalEntry {
+  id: string;
+  title: string;
+  content: string;
+  mood: "😊" | "🙂" | "😐" | "😟" | "😔";
+  gratitude: string;
+  challenges: string;
+  wins: string;
+  tomorrowFocus: string;
+  date: Date;
+}
+
+interface ChatMessage {
+  id: string;
+  text: string;
+  isUser: boolean;
+  timestamp: Date;
+  quickActions?: string[];
+  emotion?: 'celebration' | 'comfort' | 'motivation' | 'default';
+  visualEmoji?: string;
+  messageColor?: string;
+}
+
+interface HabitLink {
+  id: string;
+  type: 'trigger' | 'habit' | 'reward';
+  name: string;
+  description?: string;
+  points: number;
+  completed: boolean;
+  timeEstimate?: number; // in minutes
+  isKeystone?: boolean;
+}
+
+interface Routine {
+  id: string;
+  name: string;
+  description: string;
+  type: 'morning' | 'evening' | 'workout' | 'custom';
+  habitLinks: HabitLink[];
+  isActive: boolean;
+  streak: number;
+  bestStreak: number;
+  lastCompleted?: Date;
+  createdAt: Date;
+  completionRate: number;
+  totalCompletions: number;
+}
+
+interface RoutineCompletion {
+  id: string;
+  routineId: string;
+  date: Date;
+  completedLinks: string[];
+  partialCompletion: boolean;
+  completionPercentage: number;
+}
+
+interface VisionElement {
+  id: string;
+  type: 'image' | 'quote' | 'mantra' | 'progress' | 'goal';
+  title: string;
+  content: string; // URL for images, text for quotes/mantras
+  category: 'health' | 'wealth' | 'relationships' | 'growth' | 'experiences';
+  targetDate?: Date;
+  achieved: boolean;
+  achievedDate?: Date;
+  position: { x: number; y: number };
+  size: { width: number; height: number };
+  style: {
+    backgroundColor?: string;
+    textColor?: string;
+    fontSize?: number;
+    fontWeight?: string;
+  };
+  createdAt: Date;
+}
+
+interface VisionBoard {
+  id: string;
+  name: string;
+  description: string;
+  elements: VisionElement[];
+  backgroundImage?: string;
+  backgroundColor: string;
+  createdAt: Date;
+  lastViewed?: Date;
+}
+
+interface Affirmation {
+  id: string;
+  text: string;
+  category: string;
+  isCustom: boolean;
+  timesUsed: number;
+  createdAt: Date;
+}
+
+interface VisualizationSession {
+  id: string;
+  duration: number; // in minutes
+  focusGoals: string[];
+  notes?: string;
+  mood: number; // 1-10
+  date: Date;
+}
+
+interface DreamLifeScript {
+  id: string;
+  morningRoutine: string;
+  idealHealth: string;
+  relationships: string;
+  career: string;
+  lifestyle: string;
+  achievements: string;
+  lastUpdated: Date;
+}
+
+interface MeditationSession {
+  id: string;
+  type: '4-4-4' | '5-5';
+  breathsCompleted: number;
+  duration: number; // in seconds
+  date: Date;
+}
+
+interface MeditationData {
+  totalBreaths: number;
+  daysStreak: number;
+  lastMeditationDate?: Date;
+  sessions: MeditationSession[];
+  todayCompleted: boolean;
+}
+
+interface UserProfile {
+  name: string;
+  age: string;
+  motivation: string;
+}
+
+export interface ThemeColors {
+  primary: string;
+  secondary: string;
+  background: string;
+  card: string;
+  text: string;
+}
+
+export interface Theme {
+  name: string;
+  colors: ThemeColors;
+}
+
+interface WellnessData {
+  phoenixPoints: number;
+  meals: Meal[];
+  extendedMeals: ExtendedMeal[];
+  addictions: Addiction[];
+  supplements: Supplement[];
+  goals: Goal[];
+  journalEntries: JournalEntry[];
+  chatMessages: ChatMessage[];
+  routines: Routine[];
+  routineCompletions: RoutineCompletion[];
+  userProfile: UserProfile;
+  lastUpdated: Date;
+  theme?: Theme;
+  visionBoards: VisionBoard[];
+  affirmations: Affirmation[];
+  visualizationSessions: VisualizationSession[];
+  dreamLifeScript?: DreamLifeScript;
+  visualizationStreak: number;
+  lastVisualizationDate?: Date;
+  meditation: MeditationData;
+}
+
+const STORAGE_KEY = "@phoenix_wellness_data";
+
+export const PRESET_THEMES: Theme[] = [
+  {
+    name: 'Phoenix',
+    colors: {
+      primary: '#FF4500',
+      secondary: '#1A2B3C',
+      background: '#121212',
+      card: 'rgba(26,43,60,0.3)',
+      text: '#FFFFFF'
+    }
+  },
+  {
+    name: 'Ocean',
+    colors: {
+      primary: '#20B2AA',
+      secondary: '#191970',
+      background: '#001F3F',
+      card: 'rgba(25,25,112,0.3)',
+      text: '#FFFFFF'
+    }
+  },
+  {
+    name: 'Forest',
+    colors: {
+      primary: '#228B22',
+      secondary: '#8B4513',
+      background: '#013220',
+      card: 'rgba(139,69,19,0.3)',
+      text: '#FFFFFF'
+    }
+  },
+  {
+    name: 'Sunset',
+    colors: {
+      primary: '#FF69B4',
+      secondary: '#9932CC',
+      background: '#2F0A2F',
+      card: 'rgba(153,50,204,0.3)',
+      text: '#FFFFFF'
+    }
+  },
+  {
+    name: 'Minimal',
+    colors: {
+      primary: '#808080',
+      secondary: '#FFFFFF',
+      background: '#000000',
+      card: 'rgba(255,255,255,0.1)',
+      text: '#FFFFFF'
+    }
+  }
+];
+
+export const [WellnessProvider, useWellness] = createContextHook(() => {
+  const [data, setData] = useState<WellnessData>({
+    phoenixPoints: 0,
+    meals: [],
+    extendedMeals: [],
+    addictions: [],
+    supplements: [],
+    goals: [],
+    journalEntries: [],
+    chatMessages: [],
+    routines: [],
+    routineCompletions: [],
+    userProfile: { name: '', age: '', motivation: '' },
+    lastUpdated: new Date(),
+    theme: PRESET_THEMES[0],
+    visionBoards: [],
+    affirmations: [],
+    visualizationSessions: [],
+    dreamLifeScript: undefined,
+    visualizationStreak: 0,
+    lastVisualizationDate: undefined,
+    meditation: {
+      totalBreaths: 0,
+      daysStreak: 0,
+      lastMeditationDate: undefined,
+      sessions: [],
+      todayCompleted: false,
+    },
+  });
+
+  const [isLoading, setIsLoading] = useState(true);
+
+  const loadData = async () => {
+    try {
+      const stored = await AsyncStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        setData({
+          ...parsed,
+          lastUpdated: new Date(parsed.lastUpdated),
+          meals: parsed.meals?.map((m: any) => ({ ...m, date: new Date(m.date) })) || [],
+          extendedMeals: parsed.extendedMeals?.map((m: any) => ({ ...m, date: new Date(m.date) })) || [],
+          addictions: parsed.addictions?.map((a: any) => ({
+            ...a,
+            lastReset: new Date(a.lastReset),
+            createdAt: new Date(a.createdAt),
+          })) || [],
+          supplements: parsed.supplements?.map((s: any) => ({
+            ...s,
+            lastTaken: s.lastTaken ? new Date(s.lastTaken) : undefined,
+            weeklyHistory: s.weeklyHistory || [false, false, false, false, false, false, false],
+          })) || [],
+          goals: parsed.goals?.map((g: any) => ({
+            ...g,
+            createdAt: new Date(g.createdAt),
+            targetDate: new Date(g.targetDate),
+            completedAt: g.completedAt ? new Date(g.completedAt) : undefined,
+            milestones: g.milestones || [],
+            progress: g.progress || 0,
+            measurementMethod: g.measurementMethod || '',
+            priority: g.priority || 'medium',
+          })) || [],
+          journalEntries: parsed.journalEntries?.map((j: any) => ({
+            ...j,
+            date: new Date(j.date),
+          })) || [],
+          chatMessages: parsed.chatMessages?.map((c: any) => ({
+            ...c,
+            timestamp: new Date(c.timestamp),
+          })) || [],
+          routines: parsed.routines?.map((r: any) => ({
+            ...r,
+            createdAt: new Date(r.createdAt),
+            lastCompleted: r.lastCompleted ? new Date(r.lastCompleted) : undefined,
+          })) || [],
+          routineCompletions: parsed.routineCompletions?.map((rc: any) => ({
+            ...rc,
+            date: new Date(rc.date),
+          })) || [],
+          userProfile: parsed.userProfile || { name: '', age: '', motivation: '' },
+          theme: parsed.theme || PRESET_THEMES[0],
+          visionBoards: parsed.visionBoards?.map((vb: any) => ({
+            ...vb,
+            createdAt: new Date(vb.createdAt),
+            lastViewed: vb.lastViewed ? new Date(vb.lastViewed) : undefined,
+            elements: vb.elements?.map((el: any) => ({
+              ...el,
+              createdAt: new Date(el.createdAt),
+              targetDate: el.targetDate ? new Date(el.targetDate) : undefined,
+              achievedDate: el.achievedDate ? new Date(el.achievedDate) : undefined,
+            })) || [],
+          })) || [],
+          affirmations: parsed.affirmations?.map((a: any) => ({
+            ...a,
+            createdAt: new Date(a.createdAt),
+          })) || [],
+          visualizationSessions: parsed.visualizationSessions?.map((vs: any) => ({
+            ...vs,
+            date: new Date(vs.date),
+          })) || [],
+          dreamLifeScript: parsed.dreamLifeScript ? {
+            ...parsed.dreamLifeScript,
+            lastUpdated: new Date(parsed.dreamLifeScript.lastUpdated),
+          } : undefined,
+          visualizationStreak: parsed.visualizationStreak || 0,
+          lastVisualizationDate: parsed.lastVisualizationDate ? new Date(parsed.lastVisualizationDate) : undefined,
+          meditation: {
+            totalBreaths: parsed.meditation?.totalBreaths || 0,
+            daysStreak: parsed.meditation?.daysStreak || 0,
+            lastMeditationDate: parsed.meditation?.lastMeditationDate ? new Date(parsed.meditation.lastMeditationDate) : undefined,
+            sessions: parsed.meditation?.sessions?.map((s: any) => ({
+              ...s,
+              date: new Date(s.date),
+            })) || [],
+            todayCompleted: parsed.meditation?.todayCompleted || false,
+          },
+        });
+      }
+    } catch (error) {
+      console.error("Error loading data:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const saveData = useCallback(async () => {
+    try {
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    } catch (error) {
+      console.error("Error saving data:", error);
+    }
+  }, [data]);
+
+  // Load data from AsyncStorage
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  // Apply theme to web
+  useEffect(() => {
+    if (Platform.OS === 'web' && data.theme && typeof document !== 'undefined') {
+      try {
+        const root = document.documentElement;
+        root.style.setProperty('--primary-color', data.theme.colors.primary);
+        root.style.setProperty('--secondary-color', data.theme.colors.secondary);
+        root.style.setProperty('--background-color', data.theme.colors.background);
+        root.style.setProperty('--card-color', data.theme.colors.card);
+        root.style.setProperty('--text-color', data.theme.colors.text);
+      } catch (error) {
+        console.error('Error applying theme to web:', error);
+      }
+    }
+  }, [data.theme]);
+
+  // Save data to AsyncStorage whenever it changes
+  useEffect(() => {
+    if (!isLoading) {
+      saveData();
+    }
+  }, [data, isLoading, saveData]);
+
+  // Reset supplements daily
+  useEffect(() => {
+    const now = new Date();
+    const lastUpdate = new Date(data.lastUpdated);
+    
+    if (now.toDateString() !== lastUpdate.toDateString()) {
+      // New day - reset supplements and meals
+      setData((prev) => ({
+        ...prev,
+        supplements: prev.supplements.map((s) => ({ ...s, takenToday: false })),
+        meals: prev.meals.filter(
+          (m) => new Date(m.date).toDateString() === now.toDateString()
+        ),
+        lastUpdated: now,
+      }));
+    }
+  }, [data.lastUpdated]);
+
+  // Phoenix Points calculation
+  const calculatePhoenixPoints = useCallback(() => {
+    let points = 0;
+    
+    // Points for completed meals
+    points += data.meals.filter((m) => m.completed).length * 10;
+    
+    // Points for addiction streaks
+    data.addictions.forEach((addiction) => {
+      const days = Math.floor(
+        (new Date().getTime() - new Date(addiction.lastReset).getTime()) /
+          (1000 * 60 * 60 * 24)
+      );
+      points += days * 5;
+    });
+    
+    // Points for supplements taken
+    points += data.supplements.filter((s) => s.takenToday).length * 2;
+    
+    // Points for completed goals
+    points += data.goals.filter((g) => g.completed).length * 50;
+    
+    // Points for journal entries
+    points += data.journalEntries.length * 15;
+    
+    // Points for routine completions
+    const today = new Date().toDateString();
+    const todaysCompletions = data.routineCompletions.filter(
+      (rc) => new Date(rc.date).toDateString() === today
+    );
+    todaysCompletions.forEach((completion) => {
+      const routine = data.routines.find((r) => r.id === completion.routineId);
+      if (routine) {
+        const basePoints = routine.habitLinks.reduce((sum, link) => sum + link.points, 0);
+        points += Math.floor(basePoints * (completion.completionPercentage / 100));
+      }
+    });
+    
+    // Points for visualization sessions
+    points += data.visualizationSessions.length * 5;
+    
+    // Points for achieved vision elements
+    data.visionBoards.forEach((board) => {
+      points += board.elements.filter((el) => el.achieved).length * 25;
+    });
+    
+    // Points for visualization streak
+    points += data.visualizationStreak * 3;
+    
+    // Points for meditation
+    points += data.meditation.sessions.length * 5;
+    points += data.meditation.daysStreak * 2;
+    if (data.meditation.todayCompleted) {
+      points += 10;
+    }
+    
+    return points;
+  }, [data]);
+
+  const phoenixPoints = useMemo(() => calculatePhoenixPoints(), [calculatePhoenixPoints]);
+
+  // Meal functions
+  const addMeal = useCallback((meal: Omit<Meal, "id" | "date">) => {
+    const newMeal: Meal = {
+      ...meal,
+      id: Date.now().toString(),
+      date: new Date(),
+    };
+    setData((prev) => ({ ...prev, meals: [...prev.meals, newMeal] }));
+  }, []);
+
+  const toggleMealComplete = useCallback((mealId: string) => {
+    setData((prev) => ({
+      ...prev,
+      meals: prev.meals.map((m) =>
+        m.id === mealId ? { ...m, completed: !m.completed } : m
+      ),
+    }));
+  }, []);
+
+  const deleteMeal = useCallback((mealId: string) => {
+    setData((prev) => ({
+      ...prev,
+      meals: prev.meals.filter((m) => m.id !== mealId),
+    }));
+  }, []);
+
+  // Extended meal functions
+  const addExtendedMeal = useCallback((meal: Omit<ExtendedMeal, "id">) => {
+    const newMeal: ExtendedMeal = {
+      ...meal,
+      id: Date.now().toString(),
+    };
+    setData((prev) => ({ ...prev, extendedMeals: [...prev.extendedMeals, newMeal] }));
+  }, []);
+
+  const deleteExtendedMeal = useCallback((mealId: string) => {
+    setData((prev) => ({
+      ...prev,
+      extendedMeals: prev.extendedMeals.filter((m) => m.id !== mealId),
+    }));
+  }, []);
+
+  // Addiction functions
+  const addAddiction = useCallback((name: string) => {
+    const newAddiction: Addiction = {
+      id: Date.now().toString(),
+      name,
+      lastReset: new Date(),
+      createdAt: new Date(),
+    };
+    setData((prev) => ({
+      ...prev,
+      addictions: [...prev.addictions, newAddiction],
+    }));
+  }, []);
+
+  const resetAddictionStreak = useCallback((addictionId: string) => {
+    setData((prev) => ({
+      ...prev,
+      addictions: prev.addictions.map((a) =>
+        a.id === addictionId ? { ...a, lastReset: new Date() } : a
+      ),
+    }));
+  }, []);
+
+  const deleteAddiction = useCallback((addictionId: string) => {
+    setData((prev) => ({
+      ...prev,
+      addictions: prev.addictions.filter((a) => a.id !== addictionId),
+    }));
+  }, []);
+
+  // Supplement functions
+  const addSupplement = useCallback((supplement: Omit<Supplement, "id" | "weeklyHistory">) => {
+    const newSupplement: Supplement = {
+      ...supplement,
+      id: Date.now().toString(),
+      weeklyHistory: [false, false, false, false, false, false, false],
+    };
+    setData((prev) => ({
+      ...prev,
+      supplements: [...prev.supplements, newSupplement],
+    }));
+  }, []);
+
+  const toggleSupplementTaken = useCallback((supplementId: string) => {
+    setData((prev) => ({
+      ...prev,
+      supplements: prev.supplements.map((s) => {
+        if (s.id === supplementId) {
+          const newTakenToday = !s.takenToday;
+          const newHistory = [...s.weeklyHistory];
+          const today = new Date().getDay();
+          newHistory[today] = newTakenToday;
+          
+          return {
+            ...s,
+            takenToday: newTakenToday,
+            lastTaken: newTakenToday ? new Date() : s.lastTaken,
+            weeklyHistory: newHistory,
+          };
+        }
+        return s;
+      }),
+    }));
+  }, []);
+
+  const deleteSupplement = useCallback((supplementId: string) => {
+    setData((prev) => ({
+      ...prev,
+      supplements: prev.supplements.filter((s) => s.id !== supplementId),
+    }));
+  }, []);
+
+  // Goal functions
+  const addGoal = useCallback((goal: Omit<Goal, "id" | "createdAt">) => {
+    const newGoal: Goal = {
+      ...goal,
+      id: Date.now().toString(),
+      createdAt: new Date(),
+    };
+    setData((prev) => ({ ...prev, goals: [...prev.goals, newGoal] }));
+  }, []);
+
+  const updateGoal = useCallback((goalId: string, updates: Partial<Goal>) => {
+    setData((prev) => ({
+      ...prev,
+      goals: prev.goals.map((g) =>
+        g.id === goalId ? { ...g, ...updates } : g
+      ),
+    }));
+  }, []);
+
+  const completeGoal = useCallback((goalId: string) => {
+    setData((prev) => ({
+      ...prev,
+      goals: prev.goals.map((g) =>
+        g.id === goalId
+          ? {
+              ...g,
+              completed: true,
+              completedAt: new Date(),
+              progress: 100,
+            }
+          : g
+      ),
+    }));
+  }, []);
+
+  const updateGoalProgress = useCallback((goalId: string, progress: number) => {
+    setData((prev) => ({
+      ...prev,
+      goals: prev.goals.map((g) =>
+        g.id === goalId
+          ? {
+              ...g,
+              progress: Math.min(Math.max(progress, 0), 100),
+              completed: progress >= 100,
+              completedAt: progress >= 100 ? new Date() : g.completedAt,
+            }
+          : g
+      ),
+    }));
+  }, []);
+
+  const deleteGoal = useCallback((goalId: string) => {
+    setData((prev) => ({
+      ...prev,
+      goals: prev.goals.filter((g) => g.id !== goalId),
+    }));
+  }, []);
+
+  // Journal functions
+  const addJournalEntry = useCallback((entry: Omit<JournalEntry, "id" | "date">) => {
+    const newEntry: JournalEntry = {
+      ...entry,
+      id: Date.now().toString(),
+      date: new Date(),
+    };
+    setData((prev) => ({
+      ...prev,
+      journalEntries: [newEntry, ...prev.journalEntries],
+    }));
+  }, []);
+
+  const updateJournalEntry = useCallback((entryId: string, updates: Partial<JournalEntry>) => {
+    setData((prev) => ({
+      ...prev,
+      journalEntries: prev.journalEntries.map((j) =>
+        j.id === entryId ? { ...j, ...updates } : j
+      ),
+    }));
+  }, []);
+
+  const deleteJournalEntry = useCallback((entryId: string) => {
+    setData((prev) => ({
+      ...prev,
+      journalEntries: prev.journalEntries.filter((j) => j.id !== entryId),
+    }));
+  }, []);
+
+  // Theme functions
+  const updateTheme = useCallback((theme: Theme) => {
+    setData((prev) => ({ ...prev, theme }));
+  }, []);
+
+  const resetToPhoenixTheme = useCallback(() => {
+    setData((prev) => ({ ...prev, theme: PRESET_THEMES[0] }));
+  }, []);
+
+  // Chat functions
+  const addChatMessage = useCallback((message: Omit<ChatMessage, "id" | "timestamp">) => {
+    const newMessage: ChatMessage = {
+      ...message,
+      id: Date.now().toString(),
+      timestamp: new Date(),
+    };
+    setData((prev) => ({
+      ...prev,
+      chatMessages: [...prev.chatMessages, newMessage],
+    }));
+  }, []);
+
+  const clearChatHistory = useCallback(() => {
+    setData((prev) => ({ ...prev, chatMessages: [] }));
+  }, []);
+
+  // User profile functions
+  const updateUserProfile = useCallback((profile: UserProfile) => {
+    setData((prev) => ({ ...prev, userProfile: profile }));
+  }, []);
+
+  // Routine functions
+  const addRoutine = useCallback((routine: Omit<Routine, "id" | "createdAt" | "streak" | "bestStreak" | "completionRate" | "totalCompletions">) => {
+    const newRoutine: Routine = {
+      ...routine,
+      id: Date.now().toString(),
+      createdAt: new Date(),
+      streak: 0,
+      bestStreak: 0,
+      completionRate: 0,
+      totalCompletions: 0,
+    };
+    setData((prev) => ({ ...prev, routines: [...prev.routines, newRoutine] }));
+  }, []);
+
+  const updateRoutine = useCallback((routineId: string, updates: Partial<Routine>) => {
+    setData((prev) => ({
+      ...prev,
+      routines: prev.routines.map((r) =>
+        r.id === routineId ? { ...r, ...updates } : r
+      ),
+    }));
+  }, []);
+
+  const deleteRoutine = useCallback((routineId: string) => {
+    setData((prev) => ({
+      ...prev,
+      routines: prev.routines.filter((r) => r.id !== routineId),
+      routineCompletions: prev.routineCompletions.filter((rc) => rc.routineId !== routineId),
+    }));
+  }, []);
+
+  const completeRoutine = useCallback((routineId: string, completedLinkIds: string[]) => {
+    const routine = data.routines.find((r) => r.id === routineId);
+    if (!routine) return;
+
+    const completionPercentage = (completedLinkIds.length / routine.habitLinks.length) * 100;
+    const isFullCompletion = completionPercentage === 100;
+    
+    const completion: RoutineCompletion = {
+      id: Date.now().toString(),
+      routineId,
+      date: new Date(),
+      completedLinks: completedLinkIds,
+      partialCompletion: !isFullCompletion,
+      completionPercentage,
+    };
+
+    setData((prev) => {
+      const updatedRoutines = prev.routines.map((r) => {
+        if (r.id === routineId) {
+          const newTotalCompletions = r.totalCompletions + 1;
+          const newStreak = isFullCompletion ? r.streak + 1 : 0;
+          const newBestStreak = Math.max(r.bestStreak, newStreak);
+          const newCompletionRate = (newTotalCompletions > 0) 
+            ? ((r.completionRate * r.totalCompletions + completionPercentage) / newTotalCompletions)
+            : completionPercentage;
+
+          return {
+            ...r,
+            streak: newStreak,
+            bestStreak: newBestStreak,
+            lastCompleted: new Date(),
+            completionRate: newCompletionRate,
+            totalCompletions: newTotalCompletions,
+          };
+        }
+        return r;
+      });
+
+      return {
+        ...prev,
+        routines: updatedRoutines,
+        routineCompletions: [...prev.routineCompletions, completion],
+      };
+    });
+  }, [data.routines]);
+
+  const reorderHabitLinks = useCallback((routineId: string, newOrder: HabitLink[]) => {
+    setData((prev) => ({
+      ...prev,
+      routines: prev.routines.map((r) =>
+        r.id === routineId ? { ...r, habitLinks: newOrder } : r
+      ),
+    }));
+  }, []);
+
+  // Vision Board functions
+  const addVisionBoard = useCallback((board: Omit<VisionBoard, "id" | "createdAt">) => {
+    const newBoard: VisionBoard = {
+      ...board,
+      id: Date.now().toString(),
+      createdAt: new Date(),
+    };
+    setData((prev) => ({ ...prev, visionBoards: [...prev.visionBoards, newBoard] }));
+  }, []);
+
+  const updateVisionBoard = useCallback((boardId: string, updates: Partial<VisionBoard>) => {
+    setData((prev) => ({
+      ...prev,
+      visionBoards: prev.visionBoards.map((vb) =>
+        vb.id === boardId ? { ...vb, ...updates } : vb
+      ),
+    }));
+  }, []);
+
+  const deleteVisionBoard = useCallback((boardId: string) => {
+    setData((prev) => ({
+      ...prev,
+      visionBoards: prev.visionBoards.filter((vb) => vb.id !== boardId),
+    }));
+  }, []);
+
+  const addVisionElement = useCallback((boardId: string, element: Omit<VisionElement, "id" | "createdAt">) => {
+    const newElement: VisionElement = {
+      ...element,
+      id: Date.now().toString(),
+      createdAt: new Date(),
+    };
+    setData((prev) => ({
+      ...prev,
+      visionBoards: prev.visionBoards.map((vb) =>
+        vb.id === boardId
+          ? { ...vb, elements: [...vb.elements, newElement] }
+          : vb
+      ),
+    }));
+  }, []);
+
+  const updateVisionElement = useCallback((boardId: string, elementId: string, updates: Partial<VisionElement>) => {
+    setData((prev) => ({
+      ...prev,
+      visionBoards: prev.visionBoards.map((vb) =>
+        vb.id === boardId
+          ? {
+              ...vb,
+              elements: vb.elements.map((el) =>
+                el.id === elementId ? { ...el, ...updates } : el
+              ),
+            }
+          : vb
+      ),
+    }));
+  }, []);
+
+  const deleteVisionElement = useCallback((boardId: string, elementId: string) => {
+    setData((prev) => ({
+      ...prev,
+      visionBoards: prev.visionBoards.map((vb) =>
+        vb.id === boardId
+          ? { ...vb, elements: vb.elements.filter((el) => el.id !== elementId) }
+          : vb
+      ),
+    }));
+  }, []);
+
+  const markVisionElementAchieved = useCallback((boardId: string, elementId: string) => {
+    setData((prev) => ({
+      ...prev,
+      visionBoards: prev.visionBoards.map((vb) =>
+        vb.id === boardId
+          ? {
+              ...vb,
+              elements: vb.elements.map((el) =>
+                el.id === elementId
+                  ? { ...el, achieved: true, achievedDate: new Date() }
+                  : el
+              ),
+            }
+          : vb
+      ),
+    }));
+  }, []);
+
+  // Affirmation functions
+  const addAffirmation = useCallback((affirmation: Omit<Affirmation, "id" | "createdAt" | "timesUsed">) => {
+    const newAffirmation: Affirmation = {
+      ...affirmation,
+      id: Date.now().toString(),
+      createdAt: new Date(),
+      timesUsed: 0,
+    };
+    setData((prev) => ({ ...prev, affirmations: [...prev.affirmations, newAffirmation] }));
+  }, []);
+
+  const updateAffirmation = useCallback((affirmationId: string, updates: Partial<Affirmation>) => {
+    setData((prev) => ({
+      ...prev,
+      affirmations: prev.affirmations.map((a) =>
+        a.id === affirmationId ? { ...a, ...updates } : a
+      ),
+    }));
+  }, []);
+
+  const deleteAffirmation = useCallback((affirmationId: string) => {
+    setData((prev) => ({
+      ...prev,
+      affirmations: prev.affirmations.filter((a) => a.id !== affirmationId),
+    }));
+  }, []);
+
+  const useAffirmation = useCallback((affirmationId: string) => {
+    setData((prev) => ({
+      ...prev,
+      affirmations: prev.affirmations.map((a) =>
+        a.id === affirmationId ? { ...a, timesUsed: a.timesUsed + 1 } : a
+      ),
+    }));
+  }, []);
+
+  // Visualization functions
+  const addVisualizationSession = useCallback((session: Omit<VisualizationSession, "id" | "date">) => {
+    const newSession: VisualizationSession = {
+      ...session,
+      id: Date.now().toString(),
+      date: new Date(),
+    };
+    
+    // Update visualization streak
+    const today = new Date().toDateString();
+    const lastDate = data.lastVisualizationDate ? new Date(data.lastVisualizationDate).toDateString() : null;
+    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toDateString();
+    
+    let newStreak = data.visualizationStreak;
+    if (lastDate === yesterday || lastDate === today) {
+      newStreak = lastDate === today ? newStreak : newStreak + 1;
+    } else {
+      newStreak = 1;
+    }
+    
+    setData((prev) => ({
+      ...prev,
+      visualizationSessions: [...prev.visualizationSessions, newSession],
+      visualizationStreak: newStreak,
+      lastVisualizationDate: new Date(),
+    }));
+  }, [data.visualizationStreak, data.lastVisualizationDate]);
+
+  // Dream Life Script functions
+  const updateDreamLifeScript = useCallback((script: Omit<DreamLifeScript, "id" | "lastUpdated">) => {
+    const updatedScript: DreamLifeScript = {
+      ...script,
+      id: data.dreamLifeScript?.id || Date.now().toString(),
+      lastUpdated: new Date(),
+    };
+    setData((prev) => ({ ...prev, dreamLifeScript: updatedScript }));
+  }, [data.dreamLifeScript]);
+
+  // Meditation functions
+  const addMeditationSession = useCallback((session: Omit<MeditationSession, "id" | "date">) => {
+    const newSession: MeditationSession = {
+      ...session,
+      id: Date.now().toString(),
+      date: new Date(),
+    };
+    
+    setData((prev) => ({
+      ...prev,
+      meditation: {
+        ...prev.meditation,
+        totalBreaths: prev.meditation.totalBreaths + session.breathsCompleted,
+        sessions: [...prev.meditation.sessions, newSession],
+      },
+    }));
+  }, []);
+
+  const markMeditationDayComplete = useCallback(() => {
+    const today = new Date().toDateString();
+    const lastDate = data.meditation.lastMeditationDate ? new Date(data.meditation.lastMeditationDate).toDateString() : null;
+    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toDateString();
+    
+    let newStreak = data.meditation.daysStreak;
+    if (lastDate === yesterday) {
+      newStreak = newStreak + 1;
+    } else if (lastDate !== today) {
+      newStreak = 1;
+    }
+    
+    setData((prev) => ({
+      ...prev,
+      meditation: {
+        ...prev.meditation,
+        daysStreak: newStreak,
+        lastMeditationDate: new Date(),
+        todayCompleted: true,
+      },
+    }));
+  }, [data.meditation.daysStreak, data.meditation.lastMeditationDate]);
+
+  // Calculate streaks
+  const streaks = useMemo(() => {
+    const result: Record<string, number> = {};
+    data.addictions.forEach((addiction) => {
+      const days = Math.floor(
+        (new Date().getTime() - new Date(addiction.lastReset).getTime()) /
+          (1000 * 60 * 60 * 24)
+      );
+      result[addiction.id] = days;
+    });
+    return result;
+  }, [data.addictions]);
+
+  // Calculate today's stats
+  const todaysMeals = useMemo(() => {
+    const today = new Date().toDateString();
+    return data.meals.filter(
+      (m) => new Date(m.date).toDateString() === today && m.completed
+    ).length;
+  }, [data.meals]);
+
+  const todaysSupplements = useMemo(() => {
+    return data.supplements.filter((s) => s.takenToday).length;
+  }, [data.supplements]);
+
+  return useMemo(() => ({
+    // Data
+    phoenixPoints,
+    meals: data.meals,
+    extendedMeals: data.extendedMeals,
+    addictions: data.addictions,
+    supplements: data.supplements,
+    goals: data.goals,
+    journalEntries: data.journalEntries,
+    streaks,
+    todaysMeals,
+    todaysSupplements,
+    isLoading,
+    currentTheme: data.theme || PRESET_THEMES[0],
+    chatMessages: data.chatMessages,
+    userProfile: data.userProfile,
+    routines: data.routines,
+    routineCompletions: data.routineCompletions,
+    visionBoards: data.visionBoards,
+    affirmations: data.affirmations,
+    visualizationSessions: data.visualizationSessions,
+    dreamLifeScript: data.dreamLifeScript,
+    visualizationStreak: data.visualizationStreak,
+    
+    // Meal functions
+    addMeal,
+    toggleMealComplete,
+    deleteMeal,
+    addExtendedMeal,
+    deleteExtendedMeal,
+    
+    // Addiction functions
+    addAddiction,
+    resetAddictionStreak,
+    deleteAddiction,
+    
+    // Supplement functions
+    addSupplement,
+    toggleSupplementTaken,
+    deleteSupplement,
+    
+    // Goal functions
+    addGoal,
+    updateGoal,
+    updateGoalProgress,
+    completeGoal,
+    deleteGoal,
+    
+    // Journal functions
+    addJournalEntry,
+    updateJournalEntry,
+    deleteJournalEntry,
+    
+    // Theme functions
+    updateTheme,
+    resetToPhoenixTheme,
+    
+    // Chat functions
+    addChatMessage,
+    clearChatHistory,
+    
+    // User profile functions
+    updateUserProfile,
+    
+    // Routine functions
+    addRoutine,
+    updateRoutine,
+    deleteRoutine,
+    completeRoutine,
+    reorderHabitLinks,
+    
+    // Vision Board functions
+    addVisionBoard,
+    updateVisionBoard,
+    deleteVisionBoard,
+    addVisionElement,
+    updateVisionElement,
+    deleteVisionElement,
+    markVisionElementAchieved,
+    
+    // Affirmation functions
+    addAffirmation,
+    updateAffirmation,
+    deleteAffirmation,
+    useAffirmation,
+    
+    // Visualization functions
+    addVisualizationSession,
+    updateDreamLifeScript,
+    
+    // Meditation functions
+    meditation: data.meditation,
+    addMeditationSession,
+    markMeditationDayComplete,
+  }), [
+    phoenixPoints,
+    data.meals,
+    data.extendedMeals,
+    data.addictions,
+    data.supplements,
+    data.goals,
+    data.journalEntries,
+    streaks,
+    todaysMeals,
+    todaysSupplements,
+    isLoading,
+    addMeal,
+    toggleMealComplete,
+    deleteMeal,
+    addExtendedMeal,
+    deleteExtendedMeal,
+    addAddiction,
+    resetAddictionStreak,
+    deleteAddiction,
+    addSupplement,
+    toggleSupplementTaken,
+    deleteSupplement,
+    addGoal,
+    updateGoal,
+    updateGoalProgress,
+    completeGoal,
+    deleteGoal,
+    addJournalEntry,
+    updateJournalEntry,
+    deleteJournalEntry,
+    updateTheme,
+    resetToPhoenixTheme,
+    addChatMessage,
+    clearChatHistory,
+    updateUserProfile,
+    data.theme,
+    data.chatMessages,
+    data.userProfile,
+    data.routines,
+    data.routineCompletions,
+    addRoutine,
+    updateRoutine,
+    deleteRoutine,
+    completeRoutine,
+    reorderHabitLinks,
+    data.visionBoards,
+    data.affirmations,
+    data.visualizationSessions,
+    data.dreamLifeScript,
+    data.visualizationStreak,
+    addVisionBoard,
+    updateVisionBoard,
+    deleteVisionBoard,
+    addVisionElement,
+    updateVisionElement,
+    deleteVisionElement,
+    markVisionElementAchieved,
+    addAffirmation,
+    updateAffirmation,
+    deleteAffirmation,
+    useAffirmation,
+    addVisualizationSession,
+    updateDreamLifeScript,
+    data.meditation,
+    addMeditationSession,
+    markMeditationDayComplete,
+  ]);
+});
