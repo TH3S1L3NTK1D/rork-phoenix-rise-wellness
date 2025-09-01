@@ -8,21 +8,26 @@ const app = new Hono();
 
 app.use("*", cors());
 
-// Simple network-stability middleware: retries upstream fetches and sets no-cache for dev
+// Add basic timeout and no-cache headers to reduce Android stale bundle issues
 app.use("*", async (c, next) => {
-  c.res = new Response(c.res.body, {
-    headers: {
-      ...Object.fromEntries(c.res.headers),
-      "cache-control": "no-store, no-cache, must-revalidate, proxy-revalidate",
-      pragma: "no-cache",
-    },
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10_000);
+  c.req.raw.signal.addEventListener?.("abort", () => controller.abort());
+
   try {
     await next();
   } catch (e) {
     console.error("[Hono] Unhandled error", e);
     return c.json({ error: "Internal Server Error" }, 500);
+  } finally {
+    clearTimeout(timeout);
   }
+});
+
+app.use("*", async (c, next) => {
+  await next();
+  c.header("cache-control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+  c.header("pragma", "no-cache");
 });
 
 app.use(
@@ -36,6 +41,8 @@ app.use(
     },
   })
 );
+
+app.get("/healthz", (c) => c.text("ok"));
 
 // Health check & debug
 app.get("/", (c) => {

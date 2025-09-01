@@ -19,13 +19,16 @@ const getBaseUrl = (): string => {
   }
 
   if (Platform.OS !== "web") {
-    const hostUri = (Constants.expoConfig as any)?.hostUri ?? (Constants as any).manifest2?.extra?.expoGo?.developer?.host ?? Constants.executionEnvironment;
+    const hostUri = (Constants.expoConfig as any)?.hostUri ?? (Constants as any).manifest2?.extra?.expoGo?.developer?.host ?? (Constants as any).debuggerHost;
     if (typeof hostUri === "string" && hostUri.includes(":")) {
-      const host = hostUri.split(":")[0];
-      const isLanIp = /^\d+\.\d+\.\d+\.\d+$/.test(host);
-      const proto = host.includes("localhost") || isLanIp ? "http" : "https";
-      console.warn(`[tRPC] Derived base URL from hostUri: ${proto}://${host}`);
-      return `${proto}://${host}`;
+      const [host, portRaw] = hostUri.split(":");
+      const port = parseInt(portRaw || "", 10);
+      const isLanIp = /^\d+\.\d+\.\d+\.\d+$/.test(host) || host.includes("localhost");
+      const proto = isLanIp ? "http" : "https";
+      const finalPort = Number.isFinite(port) ? port : 8081;
+      const base = `${proto}://${host}:${finalPort}`;
+      console.warn(`[tRPC] Derived base URL from hostUri: ${base}`);
+      return base;
     }
   }
 
@@ -35,7 +38,7 @@ const getBaseUrl = (): string => {
 
 async function fetchWithRetry(input: RequestInfo | URL, init?: RequestInit & { retry?: number; retryDelayMs?: number; timeoutMs?: number }): Promise<Response> {
   const retry = init?.retry ?? 3;
-  const retryDelayMs = init?.retryDelayMs ?? 500;
+  const retryDelayMs = init?.retryDelayMs ?? 700;
   const timeoutMs = init?.timeoutMs ?? 8000;
 
   for (let attempt = 0; attempt <= retry; attempt++) {
@@ -54,17 +57,19 @@ async function fetchWithRetry(input: RequestInfo | URL, init?: RequestInit & { r
         },
       });
       clearTimeout(id);
-      if (res.status >= 500 && attempt < retry) {
-        const delay = retryDelayMs * Math.pow(2, attempt);
-        console.warn(`[tRPC] 5xx response, retrying in ${delay}ms (attempt ${attempt + 1}/${retry})`);
+      if ((res.status >= 500 || res.status === 429 || res.status === 408) && attempt < retry) {
+        const jitter = Math.random() * 100;
+        const delay = retryDelayMs * Math.pow(2, attempt) + jitter;
+        console.warn(`[tRPC] ${res.status} response, retrying in ${Math.round(delay)}ms (attempt ${attempt + 1}/${retry})`);
         await new Promise(r => setTimeout(r, delay));
         continue;
       }
       return res;
     } catch (e) {
       if (attempt >= retry) throw e as Error;
-      const delay = retryDelayMs * Math.pow(2, attempt);
-      console.warn(`[tRPC] Network error, retrying in ${delay}ms (attempt ${attempt + 1}/${retry})`, e);
+      const jitter = Math.random() * 100;
+      const delay = retryDelayMs * Math.pow(2, attempt) + jitter;
+      console.warn(`[tRPC] Network error, retrying in ${Math.round(delay)}ms (attempt ${attempt + 1}/${retry})`, e);
       await new Promise(r => setTimeout(r, delay));
     }
   }

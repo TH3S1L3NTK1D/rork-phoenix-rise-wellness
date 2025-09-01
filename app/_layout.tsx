@@ -16,12 +16,17 @@ SplashScreen.preventAutoHideAsync();
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      retry: 2,
+      retry: (failureCount, error) => {
+        const status = (error as any)?.status ?? (error as any)?.response?.status;
+        if (status && (status < 500 && status !== 408 && status !== 429)) return false;
+        return failureCount < 3;
+      },
       staleTime: 15_000,
       gcTime: 5 * 60_000,
       networkMode: 'online',
       refetchOnWindowFocus: true,
       refetchOnReconnect: true,
+      retryDelay: (attempt) => Math.min(2000, 500 * Math.pow(2, attempt)) + Math.random() * 150,
     },
     mutations: {
       retry: 1,
@@ -29,8 +34,6 @@ const queryClient = new QueryClient({
     },
   },
 });
-
-
 
 function RootLayoutNav() {
   return (
@@ -149,7 +152,32 @@ export default function RootLayout() {
         if (__DEV__ && Platform.OS === 'android') {
           console.log('[RootLayout] Dev Android launch: clearing potential stale caches');
           await AsyncStorage.removeItem('@@expo/bundles');
+          await AsyncStorage.removeItem('EXPO_DEV_TOOLS_CACHE');
+          await AsyncStorage.removeItem('EXPO_ERROR_RECOVERY_CACHE');
+          await AsyncStorage.removeItem('react-query-cache');
           queryClient.clear();
+        }
+        // Preflight health check to warm connection and detect VPN/firewall issues
+        const base = typeof window !== 'undefined' ? window.location.origin : '';
+        const url = `${base}/api/healthz`;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            console.log(`[RootLayout] Preflight ping ${url} (attempt ${attempt + 1}/3)`);
+            const controller = new AbortController();
+            const id = setTimeout(() => controller.abort(), 5000);
+            const res = await fetch(url, { cache: 'no-store', signal: controller.signal });
+            clearTimeout(id);
+            if (res.ok) {
+              console.log('[RootLayout] Preflight OK');
+              break;
+            } else {
+              console.warn('[RootLayout] Preflight non-OK', res.status);
+              await new Promise(r => setTimeout(r, 300 * (attempt + 1)));
+            }
+          } catch (e) {
+            console.warn('[RootLayout] Preflight failed', e);
+            await new Promise(r => setTimeout(r, 300 * (attempt + 1)));
+          }
         }
       } catch (e) {
         console.warn('[RootLayout] Cache clear noop:', e);
@@ -158,7 +186,6 @@ export default function RootLayout() {
       }
     })();
 
-    // React Query focus manager hookup for RN/Web
     const sub = () => {
       const isFocused = typeof document !== 'undefined' ? !document.hidden : true;
       focusManager.setFocused(isFocused);
