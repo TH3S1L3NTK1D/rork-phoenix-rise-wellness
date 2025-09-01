@@ -860,7 +860,24 @@ export default function SettingsScreen() {
           )}
         </View>
 
-        <TouchableOpacity style={styles.saveButton} onPress={saveProfile} activeOpacity={0.8}>
+        <TouchableOpacity
+          testID="settings-save-profile"
+          style={styles.saveButton}
+          activeOpacity={0.8}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          onPressIn={() => {
+            if (Platform.OS === 'android') {
+              console.log('[Settings] Save Profile onPressIn');
+              saveProfile();
+            }
+          }}
+          onPress={() => {
+            if (Platform.OS !== 'android') {
+              console.log('[Settings] Save Profile onPress');
+              saveProfile();
+            }
+          }}
+        >
           <LinearGradient colors={["#FF4500", "#FF6347"]} style={styles.saveButtonGradient}>
             <Save size={20} color="#FFFFFF" />
             <Text style={styles.saveButtonText}>Save Profile</Text>
@@ -918,7 +935,24 @@ export default function SettingsScreen() {
       <View style={styles.glassCard}>
         <Text style={styles.cardTitle}>Data Management</Text>
         
-        <TouchableOpacity style={styles.dataButton} onPress={exportData} activeOpacity={0.8}>
+        <TouchableOpacity
+          testID="settings-export-data"
+          style={styles.dataButton}
+          activeOpacity={0.8}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          onPressIn={() => {
+            if (Platform.OS === 'android') {
+              console.log('[Settings] Export Data onPressIn');
+              exportData();
+            }
+          }}
+          onPress={() => {
+            if (Platform.OS !== 'android') {
+              console.log('[Settings] Export Data onPress');
+              exportData();
+            }
+          }}
+        >
           <LinearGradient colors={["#1A2B3C", "#003366"]} style={styles.dataButtonGradient}>
             <Download size={20} color="#FFFFFF" />
             <Text style={styles.dataButtonText}>Export Data</Text>
@@ -950,9 +984,22 @@ export default function SettingsScreen() {
         <Text style={styles.cardTitle}>Danger Zone</Text>
         
         <TouchableOpacity 
+          testID="settings-clear-all"
           style={[styles.dataButton, styles.dangerButton]} 
-          onPress={clearAllData} 
           activeOpacity={0.8}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          onPressIn={() => {
+            if (Platform.OS === 'android') {
+              console.log('[Settings] Clear All onPressIn');
+              clearAllData();
+            }
+          }}
+          onPress={() => {
+            if (Platform.OS !== 'android') {
+              console.log('[Settings] Clear All onPress');
+              clearAllData();
+            }
+          }}
         >
           <LinearGradient colors={["#DC2626", "#B91C1C"]} style={styles.dataButtonGradient}>
             <Trash2 size={20} color="#FFFFFF" />
@@ -1445,9 +1492,22 @@ export default function SettingsScreen() {
         </View>
         
         <TouchableOpacity 
+          testID="settings-voice-test"
           style={[styles.testVoiceButton, { backgroundColor: currentTheme.colors.primary + '20' }]}
-          onPress={testClonedVoice}
           activeOpacity={0.8}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          onPressIn={() => {
+            if (Platform.OS === 'android') {
+              console.log('[Settings] Test Voice onPressIn');
+              testClonedVoice();
+            }
+          }}
+          onPress={() => {
+            if (Platform.OS !== 'android') {
+              console.log('[Settings] Test Voice onPress');
+              testClonedVoice();
+            }
+          }}
         >
           <Text style={[styles.testVoiceButtonText, { color: currentTheme.colors.primary }]}>🔊 Test Cloned Voice</Text>
         </TouchableOpacity>

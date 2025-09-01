@@ -1037,8 +1037,21 @@ export default function PhoenixCoach() {
               {message.quickActions.map((action: string, actionIndex: number) => (
                 <TouchableOpacity
                   key={actionIndex}
+                  testID={`quick-action-${actionIndex}`}
                   style={[styles.quickActionButton, { borderColor: theme.primary }]}
-                  onPress={() => sendMessage(action)}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  onPressIn={() => {
+                    if (Platform.OS === 'android') {
+                      console.log('[Coach] quickAction onPressIn', action);
+                      sendMessage(action);
+                    }
+                  }}
+                  onPress={() => {
+                    if (Platform.OS !== 'android') {
+                      console.log('[Coach] quickAction onPress', action);
+                      sendMessage(action);
+                    }
+                  }}
                 >
                   <Text style={[styles.quickActionText, { color: theme.primary }]}>
                     {action}
@@ -1121,16 +1134,48 @@ export default function PhoenixCoach() {
               <Flame size={24} color={currentTheme.colors.primary} />
             </View>
             <View>
-              <Text style={[styles.headerTitle, { color: currentTheme.colors.text }]}>Phoenix Coach</Text>
+              <Text testID="coach-header-title" style={[styles.headerTitle, { color: currentTheme.colors.text }]}>Phoenix Coach</Text>
               <Text style={[styles.headerSubtitle, { color: currentTheme.colors.text, opacity: 0.7 }]}>Your AI Life Coach</Text>
             </View>
           </View>
           
           <View style={styles.headerButtons}>
-            <TouchableOpacity onPress={() => setShowVoiceSettings(true)} style={styles.settingsButton}>
+            <TouchableOpacity
+              testID="coach-header-settings"
+              style={styles.settingsButton}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              onPressIn={() => {
+                if (Platform.OS === 'android') {
+                  console.log('[Coach] settings onPressIn');
+                  setShowVoiceSettings(true);
+                }
+              }}
+              onPress={() => {
+                if (Platform.OS !== 'android') {
+                  console.log('[Coach] settings onPress');
+                  setShowVoiceSettings(true);
+                }
+              }}
+            >
               <Settings size={20} color={currentTheme.colors.text} />
             </TouchableOpacity>
-            <TouchableOpacity onPress={handleClearChat} style={styles.clearButton}>
+            <TouchableOpacity
+              testID="coach-header-clear"
+              style={styles.clearButton}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              onPressIn={() => {
+                if (Platform.OS === 'android') {
+                  console.log('[Coach] clear onPressIn');
+                  handleClearChat();
+                }
+              }}
+              onPress={() => {
+                if (Platform.OS !== 'android') {
+                  console.log('[Coach] clear onPress');
+                  handleClearChat();
+                }
+              }}
+            >
               <RotateCcw size={20} color={currentTheme.colors.text} />
             </TouchableOpacity>
           </View>
@@ -1150,13 +1195,26 @@ export default function PhoenixCoach() {
         {/* Suggested Questions */}
         {chatMessages.length <= 1 && (
           <View style={styles.suggestionsContainer}>
-            <Text style={[styles.suggestionsTitle, { color: currentTheme.colors.text }]}>Suggested questions:</Text>
+            <Text testID="coach-suggestions-title" style={[styles.suggestionsTitle, { color: currentTheme.colors.text }]}>Suggested questions:</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.suggestionsScroll}>
               {suggestedQuestions.map((question, index) => (
                 <TouchableOpacity
                   key={index}
+                  testID={`coach-suggestion-${index}`}
                   style={[styles.suggestionChip, { backgroundColor: currentTheme.colors.card, borderColor: currentTheme.colors.primary }]}
-                  onPress={() => handleSuggestedQuestion(question)}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  onPressIn={() => {
+                    if (Platform.OS === 'android') {
+                      console.log('[Coach] suggestion onPressIn', question);
+                      handleSuggestedQuestion(question);
+                    }
+                  }}
+                  onPress={() => {
+                    if (Platform.OS !== 'android') {
+                      console.log('[Coach] suggestion onPress', question);
+                      handleSuggestedQuestion(question);
+                    }
+                  }}
                 >
                   <Text style={[styles.suggestionText, { color: currentTheme.colors.text }]}>{question}</Text>
                 </TouchableOpacity>
@@ -1203,14 +1261,28 @@ export default function PhoenixCoach() {
           <Text style={[styles.voiceSelectionLabel, { color: currentTheme.colors.text }]}>Voice:</Text>
           <View style={[styles.dropdownContainer, { borderColor: currentTheme.colors.primary }]}>
             <TouchableOpacity
+              testID="coach-voice-dropdown"
               style={styles.dropdownButton}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              onPressIn={() => {
+                if (Platform.OS === 'android') {
+                  console.log('[Coach] voice dropdown onPressIn');
+                  const voices = ['default', 'custom', 'mentor'];
+                  const currentIndex = voices.indexOf(selectedVoice);
+                  const nextIndex = (currentIndex + 1) % voices.length;
+                  const nextVoice = voices[nextIndex];
+                  saveSelectedVoice(nextVoice);
+                }
+              }}
               onPress={() => {
-                // Cycle through voice options
-                const voices = ['default', 'custom', 'mentor'];
-                const currentIndex = voices.indexOf(selectedVoice);
-                const nextIndex = (currentIndex + 1) % voices.length;
-                const nextVoice = voices[nextIndex];
-                saveSelectedVoice(nextVoice);
+                if (Platform.OS !== 'android') {
+                  console.log('[Coach] voice dropdown onPress');
+                  const voices = ['default', 'custom', 'mentor'];
+                  const currentIndex = voices.indexOf(selectedVoice);
+                  const nextIndex = (currentIndex + 1) % voices.length;
+                  const nextVoice = voices[nextIndex];
+                  saveSelectedVoice(nextVoice);
+                }
               }}
             >
               <Text style={[styles.dropdownText, { color: currentTheme.colors.text }]}>
@@ -1238,11 +1310,24 @@ export default function PhoenixCoach() {
           />
           
           <TouchableOpacity
+            testID="coach-mic"
             style={[styles.voiceButton, { 
               backgroundColor: isListening ? currentTheme.colors.primary : 'rgba(255, 255, 255, 0.1)',
               borderColor: currentTheme.colors.primary 
             }]}
-            onPress={isListening ? stopListening : () => startListening(false)}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            onPressIn={() => {
+              if (Platform.OS === 'android' && !isTyping && !voiceModeActive) {
+                console.log('[Coach] mic onPressIn');
+                (isListening ? stopListening() : startListening(false));
+              }
+            }}
+            onPress={() => {
+              if (Platform.OS !== 'android' && !isTyping && !voiceModeActive) {
+                console.log('[Coach] mic onPress');
+                (isListening ? stopListening() : startListening(false));
+              }
+            }}
             disabled={isTyping || voiceModeActive}
           >
             {isListening ? (
@@ -1271,19 +1356,45 @@ export default function PhoenixCoach() {
           </TouchableOpacity>
           
           <TouchableOpacity
+            testID="coach-voice-mode"
             style={[styles.voiceModeButton, { 
               backgroundColor: voiceModeActive ? currentTheme.colors.primary : 'rgba(255, 255, 255, 0.1)',
               borderColor: currentTheme.colors.primary 
             }]}
-            onPress={toggleVoiceMode}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            onPressIn={() => {
+              if (Platform.OS === 'android' && !isTyping) {
+                console.log('[Coach] voice mode onPressIn');
+                toggleVoiceMode();
+              }
+            }}
+            onPress={() => {
+              if (Platform.OS !== 'android' && !isTyping) {
+                console.log('[Coach] voice mode onPress');
+                toggleVoiceMode();
+              }
+            }}
             disabled={isTyping}
           >
             <Radio size={20} color={voiceModeActive ? 'white' : currentTheme.colors.primary} />
           </TouchableOpacity>
           
           <TouchableOpacity
+            testID="coach-send"
             style={[styles.sendButton, { backgroundColor: currentTheme.colors.primary }]}
-            onPress={() => sendMessage()}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            onPressIn={() => {
+              if (Platform.OS === 'android' && inputText.trim() && !isTyping) {
+                console.log('[Coach] send onPressIn');
+                sendMessage();
+              }
+            }}
+            onPress={() => {
+              if (Platform.OS !== 'android' && inputText.trim() && !isTyping) {
+                console.log('[Coach] send onPress');
+                sendMessage();
+              }
+            }}
             disabled={!inputText.trim() || isTyping}
           >
             <Send size={20} color="white" />
@@ -1324,7 +1435,19 @@ export default function PhoenixCoach() {
                           borderColor: voiceSettings.currentProfile === profile.id ? currentTheme.colors.primary : 'transparent',
                         },
                       ]}
-                      onPress={() => saveVoiceSettings({ ...voiceSettings, currentProfile: profile.id })}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      onPressIn={() => {
+                        if (Platform.OS === 'android') {
+                          console.log('[Coach] select profile onPressIn', profile.id);
+                          saveVoiceSettings({ ...voiceSettings, currentProfile: profile.id });
+                        }
+                      }}
+                      onPress={() => {
+                        if (Platform.OS !== 'android') {
+                          console.log('[Coach] select profile onPress', profile.id);
+                          saveVoiceSettings({ ...voiceSettings, currentProfile: profile.id });
+                        }
+                      }}
                     >
                       <View style={styles.profileInfo}>
                         <Text style={[styles.profileName, { color: currentTheme.colors.text }]}>{profile.name}</Text>
@@ -1437,8 +1560,21 @@ export default function PhoenixCoach() {
                 {/* Test Voice */}
                 <View style={styles.settingsSection}>
                   <TouchableOpacity
+                    testID="coach-test-voice"
                     style={[styles.testButton, { backgroundColor: currentTheme.colors.primary }]}
-                    onPress={testVoice}
+                    hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                    onPressIn={() => {
+                      if (Platform.OS === 'android') {
+                        console.log('[Coach] test voice onPressIn');
+                        testVoice();
+                      }
+                    }}
+                    onPress={() => {
+                      if (Platform.OS !== 'android') {
+                        console.log('[Coach] test voice onPress');
+                        testVoice();
+                      }
+                    }}
                   >
                     <Play size={20} color="white" />
                     <Text style={styles.testButtonText}>Test Voice</Text>
@@ -1644,13 +1780,21 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   settingsButton: {
-    padding: 8,
-    borderRadius: 20,
+    minWidth: 60,
+    minHeight: 60,
+    padding: 12,
+    borderRadius: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
   },
   clearButton: {
-    padding: 8,
-    borderRadius: 20,
+    minWidth: 60,
+    minHeight: 60,
+    padding: 12,
+    borderRadius: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
   },
   chatContainer: {
@@ -1804,18 +1948,18 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
   },
   voiceButton: {
-    width: 45,
-    height: 45,
-    borderRadius: 22.5,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 10,
     borderWidth: 1,
   },
   voiceModeButton: {
-    width: 45,
-    height: 45,
-    borderRadius: 22.5,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 10,
@@ -1863,9 +2007,9 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   sendButton: {
-    width: 45,
-    height: 45,
-    borderRadius: 22.5,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#FF4500',
