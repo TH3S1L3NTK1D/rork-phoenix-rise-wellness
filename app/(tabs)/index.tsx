@@ -4,22 +4,43 @@ import {
   Text,
   View,
   ScrollView,
-  TouchableOpacity,
+  Pressable,
   Animated,
   Dimensions,
+  Platform,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Flame, Target, Utensils, Pill, Shield } from "lucide-react-native";
 import { useWellness } from "@/providers/WellnessProvider";
+import { useRouter } from "expo-router";
+import * as Haptics from "expo-haptics";
 
 const { width } = Dimensions.get('window');
 const isSmallScreen = width < 768;
 
 export default function DashboardScreen() {
   const { phoenixPoints, streaks, todaysMeals, todaysSupplements, goals } = useWellness();
+  const router = useRouter();
   const scaleAnim = React.useRef(new Animated.Value(1)).current;
   const progressAnim = React.useRef(new Animated.Value(0)).current;
+
+  const navigateWithHaptics = React.useCallback(async (route: string) => {
+    try {
+      router.push(`/${route}`);
+      if (Platform.OS !== "web") {
+        requestAnimationFrame(async () => {
+          try {
+            await Haptics.selectionAsync();
+          } catch (e) {
+            console.warn("[Haptics] selection failed", e);
+          }
+        });
+      }
+    } catch (e) {
+      console.warn("[Navigation] push failed", e);
+    }
+  }, [router]);
 
   React.useEffect(() => {
     Animated.loop(
@@ -237,43 +258,64 @@ export default function DashboardScreen() {
 
           {/* Metric Cards */}
           <View style={styles.metricsGrid}>
-            {metricCards.map((metric, index) => (
-              <TouchableOpacity
-                key={index}
-                style={styles.metricCard}
-                activeOpacity={0.8}
-              >
-                <View style={styles.glassMetricCard}>
-                  <View style={styles.metricHeader}>
-                    {metric.icon}
-                    <Text style={styles.metricValue}>{metric.value}</Text>
+            {metricCards.map((metric, index) => {
+              const route = index === 0 ? "meal-prep" : index === 1 ? "insights" : index === 2 ? "supplements" : "goals";
+              return (
+                <Pressable
+                  key={index}
+                  testID={`metric-${index}`}
+                  accessibilityRole="button"
+                  onPressIn={() => console.log(`[Metric] pressIn ${route}`)}
+                  onPress={() => navigateWithHaptics(route)}
+                  android_ripple={{ color: "rgba(255,69,0,0.12)", borderless: false }}
+                  style={styles.metricCard}
+                >
+                  <View style={styles.glassMetricCard}>
+                    <View style={styles.metricHeader}>
+                      {metric.icon}
+                      <Text style={styles.metricValue}>{metric.value}</Text>
+                    </View>
+                    <Text style={styles.metricLabel}>{metric.label}</Text>
+                    <Text style={styles.metricSubtitle}>{metric.subtitle}</Text>
                   </View>
-                  <Text style={styles.metricLabel}>{metric.label}</Text>
-                  <Text style={styles.metricSubtitle}>{metric.subtitle}</Text>
-                </View>
-              </TouchableOpacity>
-            ))}
+                </Pressable>
+              );
+            })}
           </View>
 
           {/* Quick Actions */}
           <View style={styles.quickActions}>
             <Text style={styles.sectionTitle}>Quick Actions</Text>
-            <TouchableOpacity style={styles.actionButton} activeOpacity={0.8}>
+            <Pressable
+              testID="qa-log-progress"
+              accessibilityRole="button"
+              onPressIn={() => console.log("[QA] log progress pressIn")}
+              onPress={() => navigateWithHaptics("goals")}
+              android_ripple={{ color: "rgba(255,69,0,0.15)", borderless: false }}
+              style={styles.actionButton}
+            >
               <LinearGradient
                 colors={["#FF4500", "#FF6347"]}
                 style={styles.actionGradient}
               >
                 <Text style={styles.actionText}>Log Today&apos;s Progress</Text>
               </LinearGradient>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.actionButton} activeOpacity={0.8}>
+            </Pressable>
+            <Pressable
+              testID="qa-weekly-report"
+              accessibilityRole="button"
+              onPressIn={() => console.log("[QA] weekly report pressIn")}
+              onPress={() => navigateWithHaptics("insights")}
+              android_ripple={{ color: "rgba(255,69,0,0.15)", borderless: false }}
+              style={styles.actionButton}
+            >
               <LinearGradient
                 colors={["#1A2B3C", "#003366"]}
                 style={styles.actionGradient}
               >
                 <Text style={styles.actionText}>View Weekly Report</Text>
               </LinearGradient>
-            </TouchableOpacity>
+            </Pressable>
           </View>
 
           {/* Motivational Quote */}

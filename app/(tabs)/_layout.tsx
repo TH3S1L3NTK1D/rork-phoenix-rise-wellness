@@ -1,21 +1,23 @@
 import { Tabs } from "expo-router";
 import { Home, UtensilsCrossed, Plus, MoreHorizontal, TrendingUp } from "lucide-react-native";
-import React, { memo, useCallback } from "react";
-import { Platform, StyleSheet, Text, TouchableOpacity, Alert, AlertButton } from "react-native";
+import React, { memo, useCallback, useState } from "react";
+import { Platform, StyleSheet, Text, Pressable, View, Alert, AlertButton } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
 
 const CustomTabBar = memo(function CustomTabBar({ state, descriptors, navigation }: any) {
   const navigateToRoute = useCallback(async (routeName: string) => {
-    if (Platform.OS !== "web") {
-      try {
-        await Haptics.selectionAsync();
-      } catch (e) {
-        console.warn("[Haptics] selection failed", e);
-      }
-    }
     try {
       navigation.navigate(routeName);
+      if (Platform.OS !== "web") {
+        requestAnimationFrame(async () => {
+          try {
+            await Haptics.selectionAsync();
+          } catch (e) {
+            console.warn("[Haptics] selection failed", e);
+          }
+        });
+      }
     } catch (e) {
       console.warn("[Tabs] navigate failed", e);
     }
@@ -23,13 +25,6 @@ const CustomTabBar = memo(function CustomTabBar({ state, descriptors, navigation
 
   const openMenu = useCallback(
     async (title: string, message: string, options: { label: string; route: string }[]) => {
-      if (Platform.OS !== "web") {
-        try {
-          await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        } catch (e) {
-          console.warn("[Haptics] impact failed", e);
-        }
-      }
       const buttons: AlertButton[] = options.map((option) => ({
         text: option.label,
         onPress: () => navigateToRoute(option.route),
@@ -82,13 +77,6 @@ const CustomTabBar = memo(function CustomTabBar({ state, descriptors, navigation
   );
 
   const showQuickActions = useCallback(async () => {
-    if (Platform.OS !== "web") {
-      try {
-        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      } catch (e) {
-        console.warn("[Haptics] impact medium failed", e);
-      }
-    }
     openMenu("Quick Actions", "What would you like to do?", [
       { label: "Log Meal", route: "meal-prep" },
       { label: "Track Day", route: "goals" },
@@ -101,12 +89,26 @@ const CustomTabBar = memo(function CustomTabBar({ state, descriptors, navigation
 
   return (
     <LinearGradient colors={["#1A2B3C", "#003366"]} style={styles.tabBar}>
-      <TouchableOpacity testID="tab-home" style={styles.tabItem} onPress={() => navigation.navigate("index")}>
+      <Pressable
+        testID="tab-home"
+        accessibilityRole="button"
+        style={styles.tabItem}
+        onPressIn={() => console.log("[Tab] home pressIn")}
+        onPress={() => navigateToRoute("index")}
+        android_ripple={{ color: "rgba(255,69,0,0.15)", borderless: false }}
+      >
         <Home size={28} color={currentRoute === "index" ? "#FF4500" : "#8aa"} />
         <Text style={[styles.tabLabel, { color: currentRoute === "index" ? "#FF4500" : "#8aa" }]}>Home</Text>
-      </TouchableOpacity>
+      </Pressable>
 
-      <TouchableOpacity testID="tab-track" style={styles.tabItem} onPress={showTrackMenu}>
+      <Pressable
+        testID="tab-track"
+        accessibilityRole="button"
+        style={styles.tabItem}
+        onPressIn={() => console.log("[Tab] track pressIn")}
+        onPress={showTrackMenu}
+        android_ripple={{ color: "rgba(255,69,0,0.15)", borderless: false }}
+      >
         <UtensilsCrossed
           size={28}
           color={["meal-prep", "supplements", "addiction"].includes(currentRoute) ? "#FF4500" : "#8aa"}
@@ -119,15 +121,29 @@ const CustomTabBar = memo(function CustomTabBar({ state, descriptors, navigation
         >
           Track
         </Text>
-      </TouchableOpacity>
+      </Pressable>
 
-      <TouchableOpacity testID="tab-quick" style={styles.centerButton} onPress={showQuickActions}>
+      <Pressable
+        testID="tab-quick"
+        accessibilityRole="button"
+        style={styles.centerButton}
+        onPressIn={() => console.log("[Tab] quick pressIn")}
+        onPress={showQuickActions}
+        android_ripple={{ color: "rgba(255,69,0,0.2)", borderless: true }}
+      >
         <LinearGradient colors={["#FF4500", "#FF6B35"]} style={styles.centerButtonGradient}>
           <Plus size={28} color="white" />
         </LinearGradient>
-      </TouchableOpacity>
+      </Pressable>
 
-      <TouchableOpacity testID="tab-progress" style={styles.tabItem} onPress={showProgressMenu}>
+      <Pressable
+        testID="tab-progress"
+        accessibilityRole="button"
+        style={styles.tabItem}
+        onPressIn={() => console.log("[Tab] progress pressIn")}
+        onPress={showProgressMenu}
+        android_ripple={{ color: "rgba(255,69,0,0.15)", borderless: false }}
+      >
         <TrendingUp
           size={28}
           color={["goals", "insights", "analytics"].includes(currentRoute) ? "#FF4500" : "#8aa"}
@@ -140,9 +156,16 @@ const CustomTabBar = memo(function CustomTabBar({ state, descriptors, navigation
         >
           Progress
         </Text>
-      </TouchableOpacity>
+      </Pressable>
 
-      <TouchableOpacity testID="tab-more" style={styles.tabItem} onPress={showMoreMenu}>
+      <Pressable
+        testID="tab-more"
+        accessibilityRole="button"
+        style={styles.tabItem}
+        onPressIn={() => console.log("[Tab] more pressIn")}
+        onPress={showMoreMenu}
+        android_ripple={{ color: "rgba(255,69,0,0.15)", borderless: false }}
+      >
         <MoreHorizontal
           size={28}
           color={["journal", "coach", "vision", "routines", "meditation", "settings"].includes(currentRoute) ? "#FF4500" : "#8aa"}
@@ -159,7 +182,7 @@ const CustomTabBar = memo(function CustomTabBar({ state, descriptors, navigation
         >
           More
         </Text>
-      </TouchableOpacity>
+      </Pressable>
     </LinearGradient>
   );
 });
