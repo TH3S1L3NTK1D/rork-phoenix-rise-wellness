@@ -1,7 +1,7 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import createContextHook from "@nkzw/create-context-hook";
-import { Platform } from "react-native";
+import { Platform, InteractionManager } from "react-native";
 
 interface Meal {
   id: string;
@@ -604,15 +604,36 @@ export const [WellnessProvider, useWellness] = createContextHook(() => {
     }
   };
 
-  const saveData = useCallback(async () => {
+  const saveInFlight = useRef(false);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const saveDataImmediate = useCallback(async (payload: WellnessData) => {
     try {
-      const serialized = JSON.stringify(data);
+      saveInFlight.current = true;
+      const serialized = JSON.stringify(payload);
       await AsyncStorage.setItem(STORAGE_KEY, serialized);
-      console.log('[WellnessProvider] saveData() bytes:', serialized.length);
+      console.log('[WellnessProvider] saveDataImmediate() bytes:', serialized.length);
     } catch (error) {
-      console.error("Error saving data:", error);
+      console.error('Error saving data:', error);
+    } finally {
+      saveInFlight.current = false;
     }
-  }, [data]);
+  }, []);
+
+  const scheduleSave = useCallback((payload: WellnessData) => {
+    if (saveTimer.current) {
+      clearTimeout(saveTimer.current);
+    }
+    saveTimer.current = setTimeout(() => {
+      if (Platform.OS === 'android') {
+        InteractionManager.runAfterInteractions(() => {
+          void saveDataImmediate(payload);
+        });
+      } else {
+        void saveDataImmediate(payload);
+      }
+    }, 300);
+  }, [saveDataImmediate]);
 
   // Load data from AsyncStorage
   useEffect(() => {
@@ -635,12 +656,17 @@ export const [WellnessProvider, useWellness] = createContextHook(() => {
     }
   }, [data.theme]);
 
-  // Save data to AsyncStorage whenever it changes
+  // Save data to AsyncStorage with debounce to avoid blocking UI on Android
   useEffect(() => {
     if (!isLoading) {
-      saveData();
+      scheduleSave(data);
     }
-  }, [data, isLoading, saveData]);
+    return () => {
+      if (saveTimer.current) {
+        clearTimeout(saveTimer.current);
+      }
+    };
+  }, [data, isLoading, scheduleSave]);
 
   // Reset supplements daily
   useEffect(() => {
@@ -971,22 +997,22 @@ export const [WellnessProvider, useWellness] = createContextHook(() => {
   }, []);
 
   const completeRoutine = useCallback((routineId: string, completedLinkIds: string[]) => {
-    const routine = data.routines.find((r) => r.id === routineId);
-    if (!routine) return;
-
-    const completionPercentage = (completedLinkIds.length / routine.habitLinks.length) * 100;
-    const isFullCompletion = completionPercentage === 100;
-    
-    const completion: RoutineCompletion = {
-      id: Date.now().toString(),
-      routineId,
-      date: new Date(),
-      completedLinks: completedLinkIds,
-      partialCompletion: !isFullCompletion,
-      completionPercentage,
-    };
-
     setData((prev) => {
+      const routine = prev.routines.find((r) => r.id === routineId);
+      if (!routine) return prev;
+
+      const completionPercentage = (completedLinkIds.length / routine.habitLinks.length) * 100;
+      const isFullCompletion = completionPercentage === 100;
+      
+      const completion: RoutineCompletion = {
+        id: Date.now().toString(),
+        routineId,
+        date: new Date(),
+        completedLinks: completedLinkIds,
+        partialCompletion: !isFullCompletion,
+        completionPercentage,
+      };
+
       const updatedRoutines = prev.routines.map((r) => {
         if (r.id === routineId) {
           const newTotalCompletions = r.totalCompletions + 1;
@@ -1014,7 +1040,7 @@ export const [WellnessProvider, useWellness] = createContextHook(() => {
         routineCompletions: [...prev.routineCompletions, completion],
       };
     });
-  }, [data.routines]);
+  }, []);
 
   const reorderHabitLinks = useCallback((routineId: string, newOrder: HabitLink[]) => {
     setData((prev) => ({

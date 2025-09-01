@@ -140,7 +140,34 @@ const HABIT_SUGGESTIONS: Record<string, string[]> = {
   ],
 };
 
-export default function RoutinesScreen() {
+class ScreenErrorBoundary extends React.Component<{ children: React.ReactNode; onRetry: () => void }, { hasError: boolean; error?: Error }> {
+  constructor(props: { children: React.ReactNode; onRetry: () => void }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError(error: Error) { return { hasError: true, error }; }
+  componentDidCatch(error: Error) { console.error('[Routines ErrorBoundary]', error); }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <View style={{ flex: 1, padding: 16, backgroundColor: '#0b0f14' }} testID="routines-error">
+          <Text style={{ color: '#fff', fontSize: 18, fontWeight: '700', marginBottom: 8 }}>Screen crashed</Text>
+          <Text style={{ color: '#ff6b6b', marginBottom: 12 }} selectable>{this.state.error?.message}</Text>
+          <TouchableOpacity
+            testID="routines-retry"
+            onPress={() => { this.setState({ hasError: false, error: undefined }); this.props.onRetry(); }}
+            style={{ backgroundColor: '#FF4500', paddingVertical: 12, borderRadius: 8, alignItems: 'center' }}
+          >
+            <Text style={{ color: '#fff', fontWeight: '700' }}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+    return this.props.children as React.ReactElement;
+  }
+}
+
+function RoutinesScreenInner() {
   const {
     routines,
     routineCompletions,

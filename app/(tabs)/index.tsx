@@ -8,6 +8,8 @@ import {
   Animated,
   Dimensions,
   Platform,
+  TouchableOpacity,
+  DevSettings,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -19,7 +21,46 @@ import * as Haptics from "expo-haptics";
 const { width } = Dimensions.get('window');
 const isSmallScreen = width < 768;
 
-export default function DashboardScreen() {
+class ScreenErrorBoundary extends React.Component<{ children: React.ReactNode; onRetry: () => void }, { hasError: boolean; error?: Error }>{
+  constructor(props: { children: React.ReactNode; onRetry: () => void }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error: Error) {
+    console.error('[Dashboard ErrorBoundary]', error);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <View style={{ flex: 1, padding: 16, backgroundColor: '#0b0f14' }} testID="dashboard-error">
+          <Text style={{ color: '#fff', fontSize: 18, fontWeight: '700', marginBottom: 8 }}>Screen crashed</Text>
+          <Text style={{ color: '#ff6b6b', marginBottom: 12 }} selectable>{this.state.error?.message}</Text>
+          <TouchableOpacity
+            testID="dashboard-retry"
+            onPress={() => {
+              try {
+                this.setState({ hasError: false, error: undefined });
+                this.props.onRetry();
+              } catch (e) {
+                console.warn('[Dashboard ErrorBoundary] retry failed', e);
+                if ((DevSettings as any)?.reload) (DevSettings as any).reload();
+              }
+            }}
+            style={{ backgroundColor: '#FF4500', paddingVertical: 12, borderRadius: 8, alignItems: 'center' }}
+          >
+            <Text style={{ color: '#fff', fontWeight: '700' }}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+    return this.props.children as React.ReactElement;
+  }
+}
+
+function DashboardScreenInner() {
   const { phoenixPoints, streaks, todaysMeals, todaysSupplements, goals } = useWellness();
   const router = useRouter();
   const scaleAnim = React.useRef(new Animated.Value(1)).current;
@@ -331,6 +372,18 @@ export default function DashboardScreen() {
         </ScrollView>
       </SafeAreaView>
     </LinearGradient>
+  );
+}
+
+export default function DashboardScreen() {
+  const [key, setKey] = React.useState<number>(0);
+  const onRetry = React.useCallback(() => setKey((k) => k + 1), []);
+  return (
+    <ScreenErrorBoundary onRetry={onRetry}>
+      <View style={{ flex: 1 }} key={key}>
+        <DashboardScreenInner />
+      </View>
+    </ScreenErrorBoundary>
   );
 }
 
