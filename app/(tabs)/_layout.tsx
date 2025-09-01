@@ -1,4 +1,4 @@
-import { Tabs } from "expo-router";
+import { Tabs, router } from "expo-router";
 import { Home, UtensilsCrossed, Plus, MoreHorizontal, TrendingUp } from "lucide-react-native";
 import React, { memo, useCallback, useState } from "react";
 import { Platform, StyleSheet, Text, Pressable, View, Alert, AlertButton } from "react-native";
@@ -8,7 +8,7 @@ import * as Haptics from "expo-haptics";
 const CustomTabBar = memo(function CustomTabBar({ state, descriptors, navigation }: any) {
   const navigateToRoute = useCallback(async (routeName: string) => {
     try {
-      navigation.navigate(routeName);
+      router.replace(`/${routeName}`);
       if (Platform.OS !== "web") {
         requestAnimationFrame(async () => {
           try {
@@ -21,7 +21,7 @@ const CustomTabBar = memo(function CustomTabBar({ state, descriptors, navigation
     } catch (e) {
       console.warn("[Tabs] navigate failed", e);
     }
-  }, [navigation]);
+  }, []);
 
   const openMenu = useCallback(
     async (title: string, message: string, options: { label: string; route: string }[]) => {
@@ -107,6 +107,7 @@ const CustomTabBar = memo(function CustomTabBar({ state, descriptors, navigation
         style={styles.tabItem}
         onPressIn={() => console.log("[Tab] track pressIn")}
         onPress={showTrackMenu}
+        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         android_ripple={{ color: "rgba(255,69,0,0.15)", borderless: false }}
       >
         <UtensilsCrossed
@@ -129,11 +130,10 @@ const CustomTabBar = memo(function CustomTabBar({ state, descriptors, navigation
         style={styles.centerButton}
         onPressIn={() => console.log("[Tab] quick pressIn")}
         onPress={showQuickActions}
+        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         android_ripple={{ color: "rgba(255,69,0,0.2)", borderless: true }}
       >
-        <LinearGradient colors={["#FF4500", "#FF6B35"]} style={styles.centerButtonGradient}>
-          <Plus size={28} color="white" />
-        </LinearGradient>
+        <MemoizedCenterButton />
       </Pressable>
 
       <Pressable
@@ -142,6 +142,7 @@ const CustomTabBar = memo(function CustomTabBar({ state, descriptors, navigation
         style={styles.tabItem}
         onPressIn={() => console.log("[Tab] progress pressIn")}
         onPress={showProgressMenu}
+        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         android_ripple={{ color: "rgba(255,69,0,0.15)", borderless: false }}
       >
         <TrendingUp
@@ -164,6 +165,7 @@ const CustomTabBar = memo(function CustomTabBar({ state, descriptors, navigation
         style={styles.tabItem}
         onPressIn={() => console.log("[Tab] more pressIn")}
         onPress={showMoreMenu}
+        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         android_ripple={{ color: "rgba(255,69,0,0.15)", borderless: false }}
       >
         <MoreHorizontal
@@ -183,6 +185,14 @@ const CustomTabBar = memo(function CustomTabBar({ state, descriptors, navigation
           More
         </Text>
       </Pressable>
+    </LinearGradient>
+  );
+});
+
+const MemoizedCenterButton = memo(function MemoizedCenterButton() {
+  return (
+    <LinearGradient colors={["#FF4500", "#FF6B35"]} style={styles.centerButtonGradient}>
+      <Plus size={28} color="white" />
     </LinearGradient>
   );
 });
@@ -230,6 +240,7 @@ const styles = StyleSheet.create({
 export default function TabLayout() {
   return (
     <Tabs
+      initialRouteName="index"
       tabBar={(props) => <CustomTabBar {...props} />}
       screenOptions={{
         headerShown: false,
