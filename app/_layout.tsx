@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, focusManager, onlineManager } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect } from "react";
@@ -13,7 +13,24 @@ import { trpc, trpcClient } from "@/lib/trpc";
 
 SplashScreen.preventAutoHideAsync();
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 2,
+      staleTime: 15_000,
+      gcTime: 5 * 60_000,
+      networkMode: 'online',
+      refetchOnWindowFocus: true,
+      refetchOnReconnect: true,
+    },
+    mutations: {
+      retry: 1,
+      networkMode: 'online',
+    },
+  },
+});
+
+
 
 function RootLayoutNav() {
   return (
@@ -131,8 +148,8 @@ export default function RootLayout() {
       try {
         if (__DEV__ && Platform.OS === 'android') {
           console.log('[RootLayout] Dev Android launch: clearing potential stale caches');
-          // Safe to clear our app storage only in dev
           await AsyncStorage.removeItem('@@expo/bundles');
+          queryClient.clear();
         }
       } catch (e) {
         console.warn('[RootLayout] Cache clear noop:', e);
@@ -141,10 +158,21 @@ export default function RootLayout() {
       }
     })();
 
+    // React Query focus manager hookup for RN/Web
+    const sub = () => {
+      const isFocused = typeof document !== 'undefined' ? !document.hidden : true;
+      focusManager.setFocused(isFocused);
+    };
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', sub);
+    }
+
     if (Platform.OS === 'web') {
       initializePWA().catch(error => {
         console.error('[Phoenix Rise] PWA initialization failed:', error);
       });
+      window.addEventListener('online', () => onlineManager.setOnline(true));
+      window.addEventListener('offline', () => onlineManager.setOnline(false));
     }
 
     const globalHandler = (global as any)?.ErrorUtils?.getGlobalHandler?.();
@@ -152,6 +180,16 @@ export default function RootLayout() {
       console.error('[GlobalErrorHandler]', { isFatal, error });
       if (globalHandler) globalHandler(error, isFatal);
     });
+
+    return () => {
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', sub);
+      }
+      if (Platform.OS === 'web') {
+        window.removeEventListener('online', () => onlineManager.setOnline(true));
+        window.removeEventListener('offline', () => onlineManager.setOnline(false));
+      }
+    };
   }, [initializePWA]);
 
   return (

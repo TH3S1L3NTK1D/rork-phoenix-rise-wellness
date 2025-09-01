@@ -48,63 +48,44 @@ self.addEventListener('activate', (event) => {
   return self.clients.claim();
 });
 
-// Fetch event - serve cached content when offline
+// During development, avoid intercepting fetches to prevent dev server interference
 self.addEventListener('fetch', (event) => {
-  console.log('[ServiceWorker] Fetch:', event.request.url);
-  
+  const isDev = self.location.hostname === 'localhost' || self.location.hostname.startsWith('192.168.') || self.location.hostname.endsWith('.local');
+  if (isDev) {
+    return; // bypass SW in dev
+  }
+
   // Skip cross-origin requests
   if (!event.request.url.startsWith(self.location.origin)) {
     return;
   }
 
   event.respondWith(
-    caches.match(event.request)
-      .then((response) => {
-        // Return cached version or fetch from network
-        if (response) {
-          console.log('[ServiceWorker] Found in cache:', event.request.url);
+    caches.match(event.request).then((response) => {
+      if (response) return response;
+      const fetchRequest = event.request.clone();
+      return fetch(fetchRequest).then((response) => {
+        if (!response || response.status !== 200 || response.type !== 'basic') {
           return response;
         }
-
-        // Clone the request because it's a stream
-        const fetchRequest = event.request.clone();
-
-        return fetch(fetchRequest)
-          .then((response) => {
-            // Check if we received a valid response
-            if (!response || response.status !== 200 || response.type !== 'basic') {
-              return response;
-            }
-
-            // Clone the response because it's a stream
-            const responseToCache = response.clone();
-
-            caches.open(CACHE_NAME)
-              .then((cache) => {
-                // Only cache GET requests
-                if (event.request.method === 'GET') {
-                  cache.put(event.request, responseToCache);
-                }
-              });
-
-            return response;
-          })
-          .catch(() => {
-            // If both cache and network fail, show offline page for navigation requests
-            if (event.request.destination === 'document') {
-              return caches.match('/offline.html');
-            }
-            
-            // For other requests, return a generic offline response
-            return new Response('Offline', {
-              status: 503,
-              statusText: 'Service Unavailable',
-              headers: new Headers({
-                'Content-Type': 'text/plain'
-              })
-            });
-          });
-      })
+        const responseToCache = response.clone();
+        caches.open(CACHE_NAME).then((cache) => {
+          if (event.request.method === 'GET') {
+            cache.put(event.request, responseToCache);
+          }
+        });
+        return response;
+      }).catch(() => {
+        if (event.request.destination === 'document') {
+          return caches.match('/offline.html');
+        }
+        return new Response('Offline', {
+          status: 503,
+          statusText: 'Service Unavailable',
+          headers: new Headers({ 'Content-Type': 'text/plain' }),
+        });
+      });
+    })
   );
 });
 
