@@ -3,10 +3,8 @@ import React from 'react';
 export default function Root({ children }: { children: React.ReactNode }) {
   const swScript = `
     try {
-      if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+      if (process.env.NODE_ENV === 'production' && typeof window !== 'undefined' && 'serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          const isProd = !location.hostname.includes('localhost') && !location.hostname.includes('127.0.0.1');
-          if (!isProd) return;
           const swUrl = '/sw.js';
           navigator.serviceWorker
             .register(swUrl)
