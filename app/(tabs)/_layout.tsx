@@ -1,7 +1,7 @@
 import { Tabs, router } from "expo-router";
 import { TABS_ROUTES, TabRouteKey } from "@/constants/routes";
 import { Home, UtensilsCrossed, Plus, MoreHorizontal, TrendingUp, ChevronRight } from "lucide-react-native";
-import React, { memo, useCallback, useMemo, useRef, useState } from "react";
+import React, { memo, useCallback, useMemo, useRef, useState, type ReactNode } from "react";
 import { Dimensions, Platform, StyleSheet, Text, Pressable, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
@@ -18,6 +18,40 @@ interface PanelKindMap {
 type PanelKind = keyof PanelKindMap;
 
 type Measured = { x: number; y: number; width: number; height: number };
+
+class PanelErrorBoundary extends React.Component<{ children: ReactNode; onReset?: () => void }, { hasError: boolean; message?: string }> {
+  constructor(props: { children: ReactNode; onReset?: () => void }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError(error: unknown) {
+    return { hasError: true, message: (error as Error)?.message ?? 'Something went wrong' };
+  }
+  componentDidCatch(error: unknown, info: React.ErrorInfo) {
+    console.warn('[Dropdown] error boundary caught', error, info?.componentStack);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <View style={[styles.panel, styles.errorBox]} testID="dropdown-error">
+          <Text style={styles.panelTitle}>Issue loading menu</Text>
+          <Text style={styles.errorText}>{this.state.message}</Text>
+          <Pressable
+            testID="dropdown-error-close"
+            style={[styles.panelItem, { justifyContent: 'center' }]}
+            onPress={() => {
+              this.setState({ hasError: false, message: undefined });
+              if (this.props.onReset) this.props.onReset();
+            }}
+          >
+            <Text style={styles.panelItemText}>Close</Text>
+          </Pressable>
+        </View>
+      );
+    }
+    return this.props.children as React.ReactElement;
+  }
+}
 
 const CustomTabBar = memo(function CustomTabBar({ state }: any) {
   const [openPanel, setOpenPanel] = useState<null | PanelKind>(null);
@@ -155,16 +189,24 @@ const CustomTabBar = memo(function CustomTabBar({ state }: any) {
                 ]}
               >
                 {openPanel === "track" && (
-                  <DropdownPanel title="Track" options={trackOptions} onSelect={navigateToRoute} />
+                  <PanelErrorBoundary onReset={() => setOpenPanel(null)}>
+                    <DropdownPanel title="Track" options={trackOptions} onSelect={navigateToRoute} />
+                  </PanelErrorBoundary>
                 )}
                 {openPanel === "progress" && (
-                  <DropdownPanel title="Progress" options={progressOptions} onSelect={navigateToRoute} />
+                  <PanelErrorBoundary onReset={() => setOpenPanel(null)}>
+                    <DropdownPanel title="Progress" options={progressOptions} onSelect={navigateToRoute} />
+                  </PanelErrorBoundary>
                 )}
                 {openPanel === "more" && (
-                  <DropdownPanel title="More" options={moreOptions} onSelect={navigateToRoute} />
+                  <PanelErrorBoundary onReset={() => setOpenPanel(null)}>
+                    <DropdownPanel title="More" options={moreOptions} onSelect={navigateToRoute} />
+                  </PanelErrorBoundary>
                 )}
                 {openPanel === "quick" && (
-                  <DropdownPanel title="Quick Actions" options={quickOptions} onSelect={navigateToRoute} />
+                  <PanelErrorBoundary onReset={() => setOpenPanel(null)}>
+                    <DropdownPanel title="Quick Actions" options={quickOptions} onSelect={navigateToRoute} />
+                  </PanelErrorBoundary>
                 )}
               </View>
             );
@@ -305,6 +347,13 @@ const CustomTabBar = memo(function CustomTabBar({ state }: any) {
       </LinearGradient>
     </>
   );
+}, (prev: any, next: any) => {
+  try {
+    return prev?.state?.index === next?.state?.index && prev?.state?.routes === next?.state?.routes;
+  } catch (e) {
+    console.warn('[Tab] memo compare failed', e);
+    return false;
+  }
 });
 
 const MemoizedCenterButton = memo(function MemoizedCenterButton() {
@@ -405,6 +454,18 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.18,
     shadowRadius: 14,
+  },
+  errorBox: {
+    borderWidth: 1,
+    borderColor: '#f4c7c7',
+    backgroundColor: '#fff8f8',
+  },
+  errorText: {
+    color: '#b00020',
+    paddingHorizontal: 8,
+    paddingBottom: 8,
+    fontSize: 12,
+    fontWeight: '600',
   },
   panelTitle: {
     fontSize: 12,
