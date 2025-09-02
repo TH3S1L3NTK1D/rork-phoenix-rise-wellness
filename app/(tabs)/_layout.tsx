@@ -1,15 +1,55 @@
 import { Tabs, router } from "expo-router";
 import { TABS_ROUTES, TabRouteKey } from "@/constants/routes";
 import { Home, UtensilsCrossed, Plus, MoreHorizontal, TrendingUp, ChevronRight } from "lucide-react-native";
-import React, { memo, useCallback, useMemo, useState } from "react";
-import { Platform, StyleSheet, Text, Pressable, View } from "react-native";
+import React, { memo, useCallback, useMemo, useRef, useState } from "react";
+import { Dimensions, Platform, StyleSheet, Text, Pressable, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
 
 const TAB_BAR_HEIGHT = Platform.OS === "ios" ? 90 : 65;
 
+interface PanelKindMap {
+  track: true;
+  progress: true;
+  more: true;
+  quick: true;
+}
+
+type PanelKind = keyof PanelKindMap;
+
+type Measured = { x: number; y: number; width: number; height: number };
+
 const CustomTabBar = memo(function CustomTabBar({ state }: any) {
-  const [openPanel, setOpenPanel] = useState<null | "track" | "progress" | "more" | "quick">(null);
+  const [openPanel, setOpenPanel] = useState<null | PanelKind>(null);
+  const [panelAnchor, setPanelAnchor] = useState<Measured | null>(null);
+
+  const triggerRefs = {
+    track: useRef<View | null>(null),
+    progress: useRef<View | null>(null),
+    more: useRef<View | null>(null),
+    quick: useRef<View | null>(null),
+  } as const;
+
+  const measureTrigger = useCallback((kind: PanelKind) => {
+    try {
+      const ref = triggerRefs[kind].current;
+      if (ref && typeof (ref as any).measureInWindow === 'function') {
+        (ref as any).measureInWindow((x: number, y: number, width: number, height: number) => {
+          setPanelAnchor({ x, y, width, height });
+        });
+      }
+    } catch (e) {
+      console.warn('[Tab] measureInWindow failed', e);
+    }
+  }, []);
+
+  const togglePanel = useCallback((kind: PanelKind) => {
+    setOpenPanel((prev) => {
+      const next = prev === kind ? null : kind;
+      requestAnimationFrame(() => measureTrigger(kind));
+      return next;
+    });
+  }, [measureTrigger]);
 
   const navigateToRoute = useCallback(async (routeName: TabRouteKey) => {
     try {
@@ -83,20 +123,42 @@ const CustomTabBar = memo(function CustomTabBar({ state }: any) {
           }}
           pointerEvents="auto"
         >
-          <View pointerEvents="box-none" style={[styles.panelContainer, { bottom: TAB_BAR_HEIGHT }]}> 
-            {openPanel === "track" && (
-              <DropdownPanel title="Track" options={trackOptions} onSelect={navigateToRoute} />
-            )}
-            {openPanel === "progress" && (
-              <DropdownPanel title="Progress" options={progressOptions} onSelect={navigateToRoute} />
-            )}
-            {openPanel === "more" && (
-              <DropdownPanel title="More" options={moreOptions} onSelect={navigateToRoute} />
-            )}
-            {openPanel === "quick" && (
-              <DropdownPanel title="Quick Actions" options={quickOptions} onSelect={navigateToRoute} />
-            )}
-          </View>
+          {(() => {
+            const { height: winH, width: winW } = Dimensions.get('window');
+            const anchor = panelAnchor;
+            const panelWidth = Math.min(winW - 24, 360);
+            const anchorCenterX = anchor ? anchor.x + anchor.width / 2 : winW / 2;
+            const left = Math.max(12, Math.min(anchorCenterX - panelWidth / 2, winW - panelWidth - 12));
+            const anchorTop = anchor ? anchor.y : winH - TAB_BAR_HEIGHT;
+            const preferredTop = anchorTop - 12 - 180;
+            const top = Math.max(12, Math.min(preferredTop, winH - TAB_BAR_HEIGHT - 200));
+            return (
+              <View
+                pointerEvents="box-none"
+                style={[
+                  styles.panelContainer,
+                  {
+                    top,
+                    left,
+                    width: panelWidth,
+                  },
+                ]}
+              >
+                {openPanel === "track" && (
+                  <DropdownPanel title="Track" options={trackOptions} onSelect={navigateToRoute} />
+                )}
+                {openPanel === "progress" && (
+                  <DropdownPanel title="Progress" options={progressOptions} onSelect={navigateToRoute} />
+                )}
+                {openPanel === "more" && (
+                  <DropdownPanel title="More" options={moreOptions} onSelect={navigateToRoute} />
+                )}
+                {openPanel === "quick" && (
+                  <DropdownPanel title="Quick Actions" options={quickOptions} onSelect={navigateToRoute} />
+                )}
+              </View>
+            );
+          })()}
         </Pressable>
       )}
 
@@ -124,26 +186,28 @@ const CustomTabBar = memo(function CustomTabBar({ state }: any) {
           style={styles.tabItem}
           onPressIn={() => {
             console.log("[Tab] track pressIn");
-            if (Platform.OS === 'android') setOpenPanel(openPanel === 'track' ? null : 'track');
+            if (Platform.OS === 'android') togglePanel('track');
           }}
           onPress={() => {
-            if (Platform.OS !== 'android') setOpenPanel(openPanel === 'track' ? null : 'track');
+            if (Platform.OS !== 'android') togglePanel('track');
           }}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           android_ripple={{ color: "rgba(255,69,0,0.15)", borderless: false }}
         >
-          <UtensilsCrossed
+          <View ref={triggerRefs.track} collapsable={false}>
+            <UtensilsCrossed
             size={28}
             color={["meal-prep", "supplements", "addiction"].includes(currentRoute) ? "#FF4500" : "#8aa"}
           />
-          <Text
-            style={[
-              styles.tabLabel,
-              { color: ["meal-prep", "supplements", "addiction"].includes(currentRoute) ? "#FF4500" : "#8aa" },
-            ]}
-          >
-            Track
-          </Text>
+            <Text
+              style={[
+                styles.tabLabel,
+                { color: ["meal-prep", "supplements", "addiction"].includes(currentRoute) ? "#FF4500" : "#8aa" },
+              ]}
+            >
+              Track
+            </Text>
+          </View>
         </Pressable>
 
         <Pressable
@@ -152,15 +216,17 @@ const CustomTabBar = memo(function CustomTabBar({ state }: any) {
           style={styles.centerButton}
           onPressIn={() => {
             console.log("[Tab] quick pressIn");
-            if (Platform.OS === 'android') setOpenPanel(openPanel === 'quick' ? null : 'quick');
+            if (Platform.OS === 'android') togglePanel('quick');
           }}
           onPress={() => {
-            if (Platform.OS !== 'android') setOpenPanel(openPanel === 'quick' ? null : 'quick');
+            if (Platform.OS !== 'android') togglePanel('quick');
           }}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           android_ripple={{ color: "rgba(255,69,0,0.2)", borderless: true }}
         >
-          <MemoizedCenterButton />
+          <View ref={triggerRefs.quick} collapsable={false}>
+            <MemoizedCenterButton />
+          </View>
         </Pressable>
 
         <Pressable
@@ -169,26 +235,28 @@ const CustomTabBar = memo(function CustomTabBar({ state }: any) {
           style={styles.tabItem}
           onPressIn={() => {
             console.log("[Tab] progress pressIn");
-            if (Platform.OS === 'android') setOpenPanel(openPanel === 'progress' ? null : 'progress');
+            if (Platform.OS === 'android') togglePanel('progress');
           }}
           onPress={() => {
-            if (Platform.OS !== 'android') setOpenPanel(openPanel === 'progress' ? null : 'progress');
+            if (Platform.OS !== 'android') togglePanel('progress');
           }}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           android_ripple={{ color: "rgba(255,69,0,0.15)", borderless: false }}
         >
-          <TrendingUp
+          <View ref={triggerRefs.progress} collapsable={false}>
+            <TrendingUp
             size={28}
             color={["goals", "insights", "analytics"].includes(currentRoute) ? "#FF4500" : "#8aa"}
           />
-          <Text
-            style={[
-              styles.tabLabel,
-              { color: ["goals", "insights", "analytics"].includes(currentRoute) ? "#FF4500" : "#8aa" },
-            ]}
-          >
-            Progress
-          </Text>
+            <Text
+              style={[
+                styles.tabLabel,
+                { color: ["goals", "insights", "analytics"].includes(currentRoute) ? "#FF4500" : "#8aa" },
+              ]}
+            >
+              Progress
+            </Text>
+          </View>
         </Pressable>
 
         <Pressable
@@ -197,30 +265,32 @@ const CustomTabBar = memo(function CustomTabBar({ state }: any) {
           style={styles.tabItem}
           onPressIn={() => {
             console.log("[Tab] more pressIn");
-            if (Platform.OS === 'android') setOpenPanel(openPanel === 'more' ? null : 'more');
+            if (Platform.OS === 'android') togglePanel('more');
           }}
           onPress={() => {
-            if (Platform.OS !== 'android') setOpenPanel(openPanel === 'more' ? null : 'more');
+            if (Platform.OS !== 'android') togglePanel('more');
           }}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           android_ripple={{ color: "rgba(255,69,0,0.15)", borderless: false }}
         >
-          <MoreHorizontal
+          <View ref={triggerRefs.more} collapsable={false}>
+            <MoreHorizontal
             size={28}
             color={["journal", "coach", "vision", "routines", "meditation", "settings"].includes(currentRoute) ? "#FF4500" : "#8aa"}
           />
-          <Text
-            style={[
-              styles.tabLabel,
-              {
-                color: ["journal", "coach", "vision", "routines", "meditation", "settings"].includes(currentRoute)
-                  ? "#FF4500"
-                  : "#8aa",
-              },
-            ]}
-          >
-            More
-          </Text>
+            <Text
+              style={[
+                styles.tabLabel,
+                {
+                  color: ["journal", "coach", "vision", "routines", "meditation", "settings"].includes(currentRoute)
+                    ? "#FF4500"
+                    : "#8aa",
+                },
+              ]}
+            >
+              More
+            </Text>
+          </View>
         </Pressable>
       </LinearGradient>
     </>
@@ -306,22 +376,20 @@ const styles = StyleSheet.create({
   overlay: {
     zIndex: 1000,
     backgroundColor: Platform.OS === 'android' ? 'rgba(0,0,0,0.1)' : 'transparent',
+    elevation: 50,
   },
   panelContainer: {
     position: 'absolute',
-    left: 0,
-    right: 0,
-    zIndex: 1001,
-    paddingHorizontal: 12,
-    paddingBottom: 12,
+    zIndex: 1100,
+    paddingHorizontal: 0,
+    paddingBottom: 0,
   },
   panel: {
     backgroundColor: '#fff',
     borderRadius: 12,
     paddingVertical: 8,
     paddingHorizontal: 8,
-    marginHorizontal: 12,
-    elevation: 10,
+    elevation: 24,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
