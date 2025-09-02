@@ -45,8 +45,18 @@ const CustomTabBar = memo(function CustomTabBar({ state }: any) {
 
   const togglePanel = useCallback((kind: PanelKind) => {
     setOpenPanel((prev) => {
-      const next = prev === kind ? null : kind;
+      const opening = prev !== kind;
+      const next = opening ? kind : null;
       requestAnimationFrame(() => measureTrigger(kind));
+      if (opening && Platform.OS !== 'web') {
+        requestAnimationFrame(async () => {
+          try {
+            await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          } catch (e) {
+            console.warn('[Haptics] open panel failed', e);
+          }
+        });
+      }
       return next;
     });
   }, [measureTrigger]);
@@ -194,7 +204,7 @@ const CustomTabBar = memo(function CustomTabBar({ state }: any) {
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           android_ripple={{ color: "rgba(255,69,0,0.15)", borderless: false }}
         >
-          <View ref={triggerRefs.track} collapsable={false}>
+          <View ref={triggerRefs.track} collapsable={false} onLayout={() => measureTrigger('track')}>
             <UtensilsCrossed
             size={28}
             color={["meal-prep", "supplements", "addiction"].includes(currentRoute) ? "#FF4500" : "#8aa"}
@@ -224,7 +234,7 @@ const CustomTabBar = memo(function CustomTabBar({ state }: any) {
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           android_ripple={{ color: "rgba(255,69,0,0.2)", borderless: true }}
         >
-          <View ref={triggerRefs.quick} collapsable={false}>
+          <View ref={triggerRefs.quick} collapsable={false} onLayout={() => measureTrigger('quick')}>
             <MemoizedCenterButton />
           </View>
         </Pressable>
@@ -243,7 +253,7 @@ const CustomTabBar = memo(function CustomTabBar({ state }: any) {
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           android_ripple={{ color: "rgba(255,69,0,0.15)", borderless: false }}
         >
-          <View ref={triggerRefs.progress} collapsable={false}>
+          <View ref={triggerRefs.progress} collapsable={false} onLayout={() => measureTrigger('progress')}>
             <TrendingUp
             size={28}
             color={["goals", "insights", "analytics"].includes(currentRoute) ? "#FF4500" : "#8aa"}
@@ -273,7 +283,7 @@ const CustomTabBar = memo(function CustomTabBar({ state }: any) {
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           android_ripple={{ color: "rgba(255,69,0,0.15)", borderless: false }}
         >
-          <View ref={triggerRefs.more} collapsable={false}>
+          <View ref={triggerRefs.more} collapsable={false} onLayout={() => measureTrigger('more')}>
             <MoreHorizontal
             size={28}
             color={["journal", "coach", "vision", "routines", "meditation", "settings"].includes(currentRoute) ? "#FF4500" : "#8aa"}
@@ -383,17 +393,18 @@ const styles = StyleSheet.create({
     zIndex: 1100,
     paddingHorizontal: 0,
     paddingBottom: 0,
+    elevation: 60,
   },
   panel: {
     backgroundColor: '#fff',
     borderRadius: 12,
     paddingVertical: 8,
     paddingHorizontal: 8,
-    elevation: 24,
+    elevation: 64,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
+    shadowOpacity: 0.18,
+    shadowRadius: 14,
   },
   panelTitle: {
     fontSize: 12,
