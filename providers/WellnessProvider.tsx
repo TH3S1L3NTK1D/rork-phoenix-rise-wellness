@@ -406,6 +406,7 @@ function isWellnessData(val: unknown): val is WellnessData {
 }
 
 const STORAGE_KEY = "@phoenix_wellness_data";
+const VOICE_PATH_KEY = "@phoenix_cloned_voice_path";
 
 export const PRESET_THEMES: Theme[] = [
   {

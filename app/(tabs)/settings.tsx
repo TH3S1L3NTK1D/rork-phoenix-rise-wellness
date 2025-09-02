@@ -13,9 +13,10 @@ import {
 
 import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { User, Database, Download, Trash2, Save, Award, Palette, RotateCcw, Mic } from "lucide-react-native";
+import { User, Database, Download, Trash2, Save, Award, Palette, RotateCcw, Mic, Upload } from "lucide-react-native";
 import { useWellness, PRESET_THEMES, Theme, ThemeColors } from "@/providers/WellnessProvider";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as DocumentPicker from 'expo-document-picker';
 
 interface UserProfile {
   name: string;
@@ -28,6 +29,7 @@ const PROFILE_STORAGE_KEY = "@phoenix_user_profile";
 
 export default function SettingsScreen() {
   const { phoenixPoints, meals, extendedMeals, goals, journalEntries, supplements, addictions, currentTheme, updateTheme, resetToPhoenixTheme } = useWellness();
+  const [clonedVoicePath, setClonedVoicePath] = useState<string>("");
   const [activeTab, setActiveTab] = useState<"profile" | "data" | "theme" | "voice">("profile");
   const [profile, setProfile] = useState<UserProfile>({
     name: "",
@@ -132,6 +134,14 @@ export default function SettingsScreen() {
     loadRecordedSamples();
     loadApiKey();
     loadClonedVoiceId();
+    (async () => {
+      try {
+        const stored = await AsyncStorage.getItem('@phoenix_cloned_voice_path');
+        if (stored) setClonedVoicePath(stored);
+      } catch (e) {
+        console.error('Error loading clonedVoicePath', e);
+      }
+    })();
   }, []);
 
   useEffect(() => {
@@ -1348,6 +1358,42 @@ export default function SettingsScreen() {
           </View>
         </View>
       )}
+
+      <View style={[styles.glassCard, { backgroundColor: currentTheme.colors.card }]}>
+        <Text style={[styles.cardTitle, { color: currentTheme.colors.text }]}>Cloned Voice (MP3) Upload</Text>
+        <Text style={[styles.apiDescription, { color: currentTheme.colors.text }]}>Upload a single MP3 file of your cloned voice to use for AI Coach TTS.</Text>
+        <TouchableOpacity
+          testID="settings-upload-voice"
+          style={[styles.dataButton]}
+          activeOpacity={0.8}
+          onPress={async () => {
+            try {
+              console.log('[Settings] Picking voice mp3');
+              const result = await DocumentPicker.getDocumentAsync({ type: 'audio/mpeg', copyToCacheDirectory: true, multiple: false });
+              if (result.canceled) return;
+              const file = result.assets?.[0];
+              if (!file?.uri) {
+                Alert.alert('Upload Failed', 'No file selected');
+                return;
+              }
+              await AsyncStorage.setItem('@phoenix_cloned_voice_path', file.uri);
+              setClonedVoicePath(file.uri);
+              Alert.alert('Voice Set', 'Cloned voice MP3 saved. Phoenix Coach will use it for TTS.');
+            } catch (e) {
+              console.error('Voice upload error', e);
+              Alert.alert('Error', 'Failed to pick file');
+            }
+          }}
+        >
+          <LinearGradient colors={[currentTheme.colors.primary, currentTheme.colors.primary + 'AA']} style={styles.dataButtonGradient}>
+            <Upload size={20} color="#FFFFFF" />
+            <Text style={styles.dataButtonText}>{clonedVoicePath ? 'Replace Cloned Voice' : 'Upload Cloned Voice (MP3)'}</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+        {!!clonedVoicePath && (
+          <Text style={[styles.successHint]}>Current file: {clonedVoicePath.substring(0, 40)}...</Text>
+        )}
+      </View>
 
       <View style={[styles.glassCard, { backgroundColor: currentTheme.colors.card }]}>
         <Text style={[styles.cardTitle, { color: currentTheme.colors.text }]}>ElevenLabs API Configuration</Text>

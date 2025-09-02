@@ -15,6 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Send, Flame, RotateCcw, Volume2, Mic, Settings, Play, VolumeX, Radio } from 'lucide-react-native';
 import { useWellness } from '@/providers/WellnessProvider';
+import { Audio } from 'expo-av';
 
 
 
@@ -591,9 +592,50 @@ export default function PhoenixCoach() {
   };
 
   // Function to speak coach messages with voice selection
-  const speakCoachMessage = (text: string) => {
-    // Use the API structure (which falls back to browser for now)
-    speakWithAPI(text);
+  const speakCoachMessage = async (text: string) => {
+    try {
+      const clonedPath = await AsyncStorage.getItem('@phoenix_cloned_voice_path');
+      if (!clonedPath) {
+        speakWithAPI(text);
+        return;
+      }
+      await playTTSWithClonedVoice(text, clonedPath);
+    } catch (e) {
+      console.log('speakCoachMessage fallback to browser', e);
+      speakWithAPI(text);
+    }
+  };
+
+  const playTTSWithClonedVoice = async (text: string, voicePath: string) => {
+    try {
+      const form = new FormData();
+      form.append('text', text);
+      form.append('language', 'en');
+      form.append('clonedVoicePath', voicePath);
+
+      const res = await fetch('https://th3s1l3ntk1d-phoenix-rise-tts-server.hf.space/run/predict', {
+        method: 'POST',
+        body: form,
+      });
+      if (!res.ok) {
+        throw new Error(`TTS error ${res.status}`);
+      }
+      const arrayBuffer = await res.arrayBuffer();
+
+      if (Platform.OS === 'web') {
+        const blob = new Blob([arrayBuffer], { type: 'audio/mpeg' });
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url as any);
+        audio.play();
+        return;
+      }
+
+      const { sound } = await Audio.Sound.createAsync({ uri: `data:audio/mpeg;base64,${Buffer.from(arrayBuffer).toString('base64')}` });
+      await sound.playAsync();
+    } catch (e) {
+      console.error('playTTSWithClonedVoice error', e);
+      speakWithBrowser(text);
+    }
   };
 
   // Enhanced Text-to-Speech function with emotional intelligence

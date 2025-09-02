@@ -21,7 +21,8 @@
           "audio"
         ],
         "NSMicrophoneUsageDescription": "Allow $(PRODUCT_NAME) to access your microphone"
-      }
+      },
+      "usesIcloudStorage": true
     },
     "android": {
       "adaptiveIcon": {
@@ -48,6 +49,12 @@
         "expo-av",
         {
           "microphonePermission": "Allow $(PRODUCT_NAME) to access your microphone"
+        }
+      ],
+      [
+        "expo-document-picker",
+        {
+          "iCloudContainerEnvironment": "Production"
         }
       ]
     ],
