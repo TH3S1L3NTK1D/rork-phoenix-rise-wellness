@@ -37,9 +37,9 @@ const getBaseUrl = (): string => {
 };
 
 async function fetchWithRetry(input: RequestInfo | URL, init?: RequestInit & { retry?: number; retryDelayMs?: number; timeoutMs?: number }): Promise<Response> {
-  const retry = init?.retry ?? 3;
-  const retryDelayMs = init?.retryDelayMs ?? 700;
-  const timeoutMs = init?.timeoutMs ?? 8000;
+  const retry = init?.retry ?? 4;
+  const retryDelayMs = init?.retryDelayMs ?? 800;
+  const timeoutMs = init?.timeoutMs ?? 15000;
 
   for (let attempt = 0; attempt <= retry; attempt++) {
     try {
@@ -57,7 +57,7 @@ async function fetchWithRetry(input: RequestInfo | URL, init?: RequestInit & { r
         },
       });
       clearTimeout(id);
-      if ((res.status >= 500 || res.status === 429 || res.status === 408) && attempt < retry) {
+      if ((res.status >= 500 || res.status === 429 || res.status === 408 || res.status === 0) && attempt < retry) {
         const jitter = Math.random() * 100;
         const delay = retryDelayMs * Math.pow(2, attempt) + jitter;
         console.warn(`[tRPC] ${res.status} response, retrying in ${Math.round(delay)}ms (attempt ${attempt + 1}/${retry})`);

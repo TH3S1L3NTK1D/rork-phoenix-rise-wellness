@@ -1,6 +1,8 @@
 import { Platform, PermissionsAndroid, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+const memoryStore = new Map<string, string>();
+
 export interface OfflineData {
   id: string;
   type: 'habit' | 'journal' | 'goal' | 'routine' | 'meditation' | 'supplement';
@@ -251,41 +253,88 @@ export class OfflineStorageManager {
   // Platform-specific storage methods
   private async setItem(key: string, value: string): Promise<void> {
     if (Platform.OS === 'web') {
-      localStorage.setItem(key, value);
+      try {
+        localStorage.setItem(key, value);
+      } catch (e) {
+        console.warn('[OfflineStorage] localStorage.setItem failed, using memory fallback', e);
+        memoryStore.set(key, value);
+      }
     } else {
-      const ok = await this.ensureAndroidStoragePermission();
-      if (!ok) return;
-      await AsyncStorage.setItem(key, value);
+      try {
+        const ok = await this.ensureAndroidStoragePermission();
+        if (!ok) return;
+        await AsyncStorage.setItem(key, value);
+      } catch (e) {
+        console.warn('[OfflineStorage] AsyncStorage.setItem failed, using memory fallback', e);
+        memoryStore.set(key, value);
+      }
     }
   }
 
   private async getItem(key: string): Promise<string | null> {
     if (Platform.OS === 'web') {
-      return localStorage.getItem(key);
+      try {
+        const v = localStorage.getItem(key);
+        if (v == null && memoryStore.has(key)) return memoryStore.get(key) ?? null;
+        return v;
+      } catch (e) {
+        console.warn('[OfflineStorage] localStorage.getItem failed, using memory fallback', e);
+        return memoryStore.get(key) ?? null;
+      }
     } else {
-      const ok = await this.ensureAndroidStoragePermission();
-      if (!ok) return null;
-      return await AsyncStorage.getItem(key);
+      try {
+        const ok = await this.ensureAndroidStoragePermission();
+        if (!ok) return null;
+        return await AsyncStorage.getItem(key);
+      } catch (e) {
+        console.warn('[OfflineStorage] AsyncStorage.getItem failed, using memory fallback', e);
+        return memoryStore.get(key) ?? null;
+      }
     }
   }
 
   private async removeItem(key: string): Promise<void> {
     if (Platform.OS === 'web') {
-      localStorage.removeItem(key);
+      try {
+        localStorage.removeItem(key);
+      } catch (e) {
+        console.warn('[OfflineStorage] localStorage.removeItem failed, removing from memory fallback', e);
+      } finally {
+        memoryStore.delete(key);
+      }
     } else {
-      const ok = await this.ensureAndroidStoragePermission();
-      if (!ok) return;
-      await AsyncStorage.removeItem(key);
+      try {
+        const ok = await this.ensureAndroidStoragePermission();
+        if (!ok) return;
+        await AsyncStorage.removeItem(key);
+      } catch (e) {
+        console.warn('[OfflineStorage] AsyncStorage.removeItem failed, removing from memory fallback', e);
+      } finally {
+        memoryStore.delete(key);
+      }
     }
   }
 
   private async getAllKeys(): Promise<readonly string[]> {
     if (Platform.OS === 'web') {
-      return Object.keys(localStorage);
+      try {
+        const keys = Object.keys(localStorage);
+        const memKeys = Array.from(memoryStore.keys());
+        const set = new Set<string>([...keys, ...memKeys]);
+        return Array.from(set);
+      } catch (e) {
+        console.warn('[OfflineStorage] localStorage keys failed, using memory fallback', e);
+        return Array.from(memoryStore.keys());
+      }
     } else {
-      const ok = await this.ensureAndroidStoragePermission();
-      if (!ok) return [];
-      return await AsyncStorage.getAllKeys();
+      try {
+        const ok = await this.ensureAndroidStoragePermission();
+        if (!ok) return [];
+        return await AsyncStorage.getAllKeys();
+      } catch (e) {
+        console.warn('[OfflineStorage] AsyncStorage.getAllKeys failed, using memory fallback', e);
+        return Array.from(memoryStore.keys());
+      }
     }
   }
 }
