@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo } from 'react';
-import { Link, router, usePathname } from 'expo-router';
+import { router, usePathname } from 'expo-router';
 import { Platform, Pressable, SafeAreaView, StyleSheet, Text, View, Alert } from 'react-native';
 import { AlertTriangle, Home } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
@@ -8,7 +8,11 @@ export default function NotFoundScreen(): React.JSX.Element {
   const pathname = usePathname();
 
   useEffect(() => {
-    console.error('[RouteMismatch] Unmatched route', { pathname, platform: Platform.OS });
+    try {
+      console.error('[RouteMismatch] Unmatched route', JSON.stringify({ pathname, platform: Platform.OS }));
+    } catch (e) {
+      console.error('[RouteMismatch] Unmatched route (stringify failed)', { pathname, platform: Platform.OS });
+    }
   }, [pathname]);
 
   const label = useMemo(() => 'Go back to home', []);
@@ -43,22 +47,20 @@ export default function NotFoundScreen(): React.JSX.Element {
           We could not find the page {pathname}. It may have been moved or deleted.
         </Text>
 
-        <Link href="/" asChild>
-          <Pressable
-            onPressIn={Platform.OS === 'android' ? handleGoHome : undefined}
-            onPress={Platform.OS !== 'android' ? handleGoHome : undefined}
-            hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
-            accessibilityRole="button"
-            accessibilityLabel={label}
-            style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
-            testID="goHomeButton"
-          >
-            <View style={styles.buttonContent} testID="goHomeButtonContent">
-              <Home color="#0B0B0F" size={22} />
-              <Text style={styles.buttonText}>{label}</Text>
-            </View>
-          </Pressable>
-        </Link>
+        <Pressable
+          onPressIn={Platform.OS === 'android' ? handleGoHome : undefined}
+          onPress={Platform.OS !== 'android' ? handleGoHome : undefined}
+          hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
+          accessibilityRole="button"
+          accessibilityLabel={label}
+          style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
+          testID="goHomeButton"
+        >
+          <View style={styles.buttonContent} testID="goHomeButtonContent">
+            <Home color="#0B0B0F" size={22} />
+            <Text style={styles.buttonText}>{label}</Text>
+          </View>
+        </Pressable>
 
         <View style={styles.meta} testID="notFoundMeta">
           <Text style={styles.metaText}>Path: {pathname}</Text>
