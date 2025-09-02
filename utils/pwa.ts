@@ -30,6 +30,11 @@ export class PWAManager {
       return;
     }
 
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('Phoenix Rise PWA: Skipping service worker in development');
+      return;
+    }
+
     try {
       try {
         const regs = await navigator.serviceWorker.getRegistrations();
@@ -46,27 +51,29 @@ export class PWAManager {
       this.serviceWorker = registration;
       console.log('Phoenix Rise PWA: Service Worker registered successfully at /service-worker.js');
 
-      // Listen for updates
       registration.addEventListener('updatefound', () => {
         const newWorker = registration.installing;
         if (newWorker) {
           newWorker.addEventListener('statechange', () => {
             if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
               console.log('Phoenix Rise PWA: New version available');
-              this.notifyUpdate();
+              if (process.env.NODE_ENV === 'production') {
+                this.notifyUpdate();
+              }
             }
           });
         }
       });
 
-      // Check for updates periodically
-      setInterval(() => {
-        try {
-          registration.update();
-        } catch (err) {
-          console.log('Phoenix Rise PWA: SW update check skipped', err);
-        }
-      }, 60000); // Check every minute
+      if (process.env.NODE_ENV === 'production') {
+        setInterval(() => {
+          try {
+            registration.update();
+          } catch (err) {
+            console.log('Phoenix Rise PWA: SW update check skipped', err);
+          }
+        }, 60000);
+      }
 
     } catch (error) {
       console.error('Phoenix Rise PWA: Service Worker registration failed:', error);
@@ -263,9 +270,8 @@ export class PWAManager {
   }
 
   private notifyUpdate(): void {
-    // You can implement a custom update notification here
     console.log('Phoenix Rise PWA: App update available');
-    
+    if (process.env.NODE_ENV !== 'production') return;
     if (typeof window !== 'undefined') {
       const updateAvailable = new CustomEvent('pwa-update-available');
       window.dispatchEvent(updateAvailable);

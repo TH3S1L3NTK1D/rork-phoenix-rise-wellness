@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider, focusManager, onlineManager } from "@
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect } from "react";
-import { Platform, View, Text, TouchableOpacity, DevSettings, ScrollView } from "react-native";
+import { Platform, View, Text, TouchableOpacity, DevSettings, ScrollView, Alert } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { WellnessProvider } from "@/providers/WellnessProvider";
@@ -123,10 +123,24 @@ export default function RootLayout() {
   };
 
   const handlePWAUpdate = () => {
-    console.log('[Phoenix Rise] App update available');
-    if (typeof window !== 'undefined' && 'confirm' in window && confirm('A new version of Phoenix Rise is available. Update now?')) {
-      pwaManager.updateApp();
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('[Phoenix Rise] Update check disabled in development');
+      return;
     }
+    if (Platform.OS === 'web') {
+      console.log('[Phoenix Rise] Update prompt disabled on web previews');
+      return;
+    }
+    console.log('[Phoenix Rise] App update available');
+    Alert.alert(
+      'Update available',
+      'A new version of Phoenix Rise is available. Update now?',
+      [
+        { text: 'Later', style: 'cancel' },
+        { text: 'Update', style: 'default', onPress: () => pwaManager.updateApp() },
+      ],
+      { cancelable: true }
+    );
   };
 
   const clearWebCaches = React.useCallback(async () => {

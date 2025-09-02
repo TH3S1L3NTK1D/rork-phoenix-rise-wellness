@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Platform, Alert } from 'react-native';
 import { Download, X, Smartphone } from 'lucide-react-native';
 
 interface BeforeInstallPromptEvent extends Event {
@@ -105,7 +105,7 @@ export default function PWAInstallPrompt({ onInstall, onDismiss }: PWAInstallPro
       instructions = 'Look for "Add to Home screen" or "Install" in your browser menu';
     }
 
-    alert(`To install Phoenix Rise Wellness:\n\n${instructions}`);
+    Alert.alert('Install Phoenix Rise Wellness', instructions);
   };
 
   const handleDismiss = () => {
