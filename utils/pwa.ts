@@ -218,7 +218,7 @@ export class PWAManager {
     }
 
     try {
-      const cache = await caches.open('phoenix-rise-wellness-v1.0.0');
+      const cache = await caches.open('phoenix-rise-wellness-v1.0.1');
       const response = new Response(JSON.stringify(data), {
         headers: { 'Content-Type': 'application/json' },
       });
@@ -236,7 +236,7 @@ export class PWAManager {
     }
 
     try {
-      const cache = await caches.open('phoenix-rise-wellness-v1.0.0');
+      const cache = await caches.open('phoenix-rise-wellness-v1.0.1');
       const response = await cache.match('/offline-wellness-data');
       
       if (response) {

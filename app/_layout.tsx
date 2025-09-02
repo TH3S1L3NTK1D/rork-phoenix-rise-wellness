@@ -11,6 +11,7 @@ import { offlineStorage } from "@/utils/offlineStorage";
 import PWAInstallPrompt from "@/components/PWAInstallPrompt";
 import { trpc, trpcClient } from "@/lib/trpc";
 
+const APP_VERSION = '1.0.3';
 SplashScreen.preventAutoHideAsync();
 
 const queryClient = new QueryClient({
@@ -128,6 +129,32 @@ export default function RootLayout() {
     }
   };
 
+  const clearWebCaches = React.useCallback(async () => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+    try {
+      const last = localStorage.getItem('phoenix:lastCacheClear');
+      const now = Date.now();
+      const shouldClear = __DEV__ || !last || now - Number(last) > 6 * 60 * 60 * 1000;
+      if (!shouldClear) return;
+      console.log('[RootLayout] Clearing web caches and SW registrations');
+      try {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map(r => r.unregister()));
+      } catch (e) {
+        console.warn('[RootLayout] SW unregister failed', e);
+      }
+      try {
+        const keys = await caches.keys();
+        await Promise.all(keys.map(k => caches.delete(k)));
+      } catch (e) {
+        console.warn('[RootLayout] CacheStorage clear failed', e);
+      }
+      localStorage.setItem('phoenix:lastCacheClear', String(now));
+    } catch (e) {
+      console.warn('[RootLayout] clearWebCaches noop', e);
+    }
+  }, []);
+
   const initializePWA = React.useCallback(async () => {
     try {
       console.log('[Phoenix Rise] Initializing PWA features...');
@@ -152,15 +179,40 @@ export default function RootLayout() {
   useEffect(() => {
     (async () => {
       try {
-        if (__DEV__ && Platform.OS === 'android') {
-          console.log('[RootLayout] Dev Android launch: clearing potential stale caches');
+        let didClearForVersion = false;
+        try {
+          const storedVersion = await AsyncStorage.getItem('phoenix:appVersion');
+          if (storedVersion !== APP_VERSION) {
+            console.log(`[RootLayout] App version changed ${storedVersion ?? 'none'} -> ${APP_VERSION}. Clearing caches...`);
+            await AsyncStorage.clear();
+            await AsyncStorage.setItem('phoenix:appVersion', APP_VERSION);
+            didClearForVersion = true;
+          }
+        } catch (e) {
+          console.warn('[RootLayout] Versioned clear failed', e);
+        }
+
+        if ((__DEV__ && Platform.OS === 'android') || didClearForVersion) {
+          console.log('[RootLayout] Dev/Version clear: removing potential stale caches');
           await AsyncStorage.removeItem('@@expo/bundles');
           await AsyncStorage.removeItem('EXPO_DEV_TOOLS_CACHE');
           await AsyncStorage.removeItem('EXPO_ERROR_RECOVERY_CACHE');
           await AsyncStorage.removeItem('react-query-cache');
+          try {
+            const keys = await AsyncStorage.getAllKeys();
+            const routerKeys = keys.filter(k => k.includes('expo-router') || k.includes('__expo_router'));
+            if (routerKeys.length) {
+              await AsyncStorage.multiRemove(routerKeys);
+              console.log('[RootLayout] Cleared Expo Router keys:', routerKeys);
+            }
+          } catch (e) {
+            console.warn('[RootLayout] Failed to clear router keys', e);
+          }
           queryClient.clear();
         }
-        // Preflight health check to warm connection and detect VPN/firewall issues
+        if (Platform.OS === 'web') {
+          await clearWebCaches();
+        }
         const base = typeof window !== 'undefined' ? window.location.origin : '';
         const url = `${base}/api/healthz`;
         for (let attempt = 0; attempt < 3; attempt++) {
@@ -220,7 +272,7 @@ export default function RootLayout() {
         window.removeEventListener('offline', () => onlineManager.setOnline(false));
       }
     };
-  }, [initializePWA]);
+  }, [initializePWA, clearWebCaches]);
 
   return (
     <ErrorBoundary>
