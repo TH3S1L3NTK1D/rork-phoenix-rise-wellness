@@ -229,7 +229,7 @@ const CustomTabBar = memo(function CustomTabBar({ state }: any) {
           android_ripple={{ color: "rgba(255,69,0,0.15)", borderless: false }}
         >
           <Home size={28} color={currentRoute === "index" ? "#FF4500" : "#8aa"} />
-          <Text style={[styles.tabLabel, { color: currentRoute === "index" ? "#FF4500" : "#8aa" }]}>Home</Text>
+          <Text style={[styles.tabLabel, { color: currentRoute === "index" ? "#FF4500" : "#8aa" }]} numberOfLines={1} ellipsizeMode="tail">Home</Text>
         </Pressable>
 
         <Pressable
@@ -256,6 +256,8 @@ const CustomTabBar = memo(function CustomTabBar({ state }: any) {
                 styles.tabLabel,
                 { color: ["meal-prep", "supplements", "addiction"].includes(currentRoute) ? "#FF4500" : "#8aa" },
               ]}
+              numberOfLines={1}
+              ellipsizeMode="tail"
             >
               Track
             </Text>
@@ -305,6 +307,8 @@ const CustomTabBar = memo(function CustomTabBar({ state }: any) {
                 styles.tabLabel,
                 { color: ["goals", "insights", "analytics"].includes(currentRoute) ? "#FF4500" : "#8aa" },
               ]}
+              numberOfLines={1}
+              ellipsizeMode="tail"
             >
               Progress
             </Text>
@@ -339,6 +343,8 @@ const CustomTabBar = memo(function CustomTabBar({ state }: any) {
                     : "#8aa",
                 },
               ]}
+              numberOfLines={1}
+              ellipsizeMode="tail"
             >
               More
             </Text>
@@ -408,9 +414,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     flex: 1,
+    flexBasis: 0,
+    minWidth: 0,
   },
   tabLabel: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: "600",
     marginTop: 2,
   },
