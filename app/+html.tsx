@@ -7,7 +7,16 @@ export default function Root({ children }: { children: React.ReactNode }) {
         const isProd = typeof process !== 'undefined' ? process.env.NODE_ENV === 'production' : true;
         if (isProd && typeof window !== 'undefined' && 'serviceWorker' in navigator) {
           const registerSW = async () => {
-            const candidates = ['/sw.js', '/service-worker.js'];
+            try {
+              const existing = await navigator.serviceWorker.getRegistrations();
+              const legacy = existing.filter(r => r.active && r.active.scriptURL.endsWith('/sw.js'));
+              await Promise.all(legacy.map(r => r.unregister()));
+              if (legacy.length) console.log('[PWA] Unregistered legacy /sw.js registrations:', legacy.length);
+            } catch (e) {
+              console.warn('[PWA] Failed to scan/unregister legacy SW', e);
+            }
+
+            const candidates = ['/service-worker.js', '/sw.js'];
             for (const url of candidates) {
               try {
                 console.log('[PWA] Probing SW URL', url);
@@ -17,7 +26,7 @@ export default function Root({ children }: { children: React.ReactNode }) {
                   continue;
                 }
                 const reg = await navigator.serviceWorker.register(url);
-                console.log('[PWA] Service Worker registered:', reg.scope);
+                console.log('[PWA] Service Worker registered:', reg.scope, 'from', url);
                 try { await reg.update(); } catch (err) { console.log('[PWA] SW update skipped', err); }
                 return;
               } catch (e) {
@@ -48,6 +57,7 @@ export default function Root({ children }: { children: React.ReactNode }) {
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
         <meta name="theme-color" content="#000000" />
         <link rel="manifest" href="/manifest.json" />
+        <link rel="preload" href="/service-worker.js" as="script" />
         <link rel="icon" href="/assets/images/favicon.png" />
         <link rel="apple-touch-icon" href="/assets/images/icon.png" />
         <meta name="apple-mobile-web-app-capable" content="yes" />

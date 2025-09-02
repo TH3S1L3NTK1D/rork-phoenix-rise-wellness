@@ -31,12 +31,20 @@ export class PWAManager {
     }
 
     try {
-      const registration = await navigator.serviceWorker.register('/sw.js', {
+      try {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.filter(r => r.active && r.active.scriptURL.endsWith('/sw.js')).map(r => r.unregister()));
+        console.log('Phoenix Rise PWA: Unregistered legacy /sw.js');
+      } catch (e) {
+        console.warn('Phoenix Rise PWA: Failed to check/unregister legacy SW', e);
+      }
+
+      const registration = await navigator.serviceWorker.register('/service-worker.js', {
         scope: '/',
       });
 
       this.serviceWorker = registration;
-      console.log('Phoenix Rise PWA: Service Worker registered successfully');
+      console.log('Phoenix Rise PWA: Service Worker registered successfully at /service-worker.js');
 
       // Listen for updates
       registration.addEventListener('updatefound', () => {
@@ -53,7 +61,11 @@ export class PWAManager {
 
       // Check for updates periodically
       setInterval(() => {
-        registration.update();
+        try {
+          registration.update();
+        } catch (err) {
+          console.log('Phoenix Rise PWA: SW update check skipped', err);
+        }
       }, 60000); // Check every minute
 
     } catch (error) {
