@@ -237,6 +237,8 @@ const styles = StyleSheet.create({
   },
 });
 
+export const unstable_settings = { initialRouteName: 'index' };
+
 export default function TabLayout() {
   return (
     <Tabs

@@ -37,7 +37,8 @@ const queryClient = new QueryClient({
 
 function RootLayoutNav() {
   return (
-    <Stack initialRouteName="(tabs)" screenOptions={{ headerBackTitle: "Back" }}>
+    <Stack initialRouteName="index" screenOptions={{ headerBackTitle: "Back" }}>
+      <Stack.Screen name="index" options={{ headerShown: false }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
     </Stack>
   );
@@ -99,6 +100,8 @@ class ErrorBoundary extends React.Component<
     return this.props.children as React.ReactElement;
   }
 }
+
+export const unstable_settings = { initialRouteName: 'index' };
 
 export default function RootLayout() {
   const handleOnline = async () => {
