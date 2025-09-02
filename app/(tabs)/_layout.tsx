@@ -94,8 +94,13 @@ const CustomTabBar = memo(function CustomTabBar({ state, descriptors, navigation
         testID="tab-home"
         accessibilityRole="button"
         style={styles.tabItem}
-        onPressIn={() => console.log("[Tab] home pressIn")}
-        onPress={() => navigateToRoute("index")}
+        onPressIn={() => {
+          console.log("[Tab] home pressIn");
+          if (Platform.OS === 'android') navigateToRoute("index");
+        }}
+        onPress={() => {
+          if (Platform.OS !== 'android') navigateToRoute("index");
+        }}
         android_ripple={{ color: "rgba(255,69,0,0.15)", borderless: false }}
       >
         <Home size={28} color={currentRoute === "index" ? "#FF4500" : "#8aa"} />
@@ -106,8 +111,13 @@ const CustomTabBar = memo(function CustomTabBar({ state, descriptors, navigation
         testID="tab-track"
         accessibilityRole="button"
         style={styles.tabItem}
-        onPressIn={() => console.log("[Tab] track pressIn")}
-        onPress={showTrackMenu}
+        onPressIn={() => {
+          console.log("[Tab] track pressIn");
+          if (Platform.OS === 'android') showTrackMenu();
+        }}
+        onPress={() => {
+          if (Platform.OS !== 'android') showTrackMenu();
+        }}
         hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         android_ripple={{ color: "rgba(255,69,0,0.15)", borderless: false }}
       >
@@ -129,8 +139,13 @@ const CustomTabBar = memo(function CustomTabBar({ state, descriptors, navigation
         testID="tab-quick"
         accessibilityRole="button"
         style={styles.centerButton}
-        onPressIn={() => console.log("[Tab] quick pressIn")}
-        onPress={showQuickActions}
+        onPressIn={() => {
+          console.log("[Tab] quick pressIn");
+          if (Platform.OS === 'android') showQuickActions();
+        }}
+        onPress={() => {
+          if (Platform.OS !== 'android') showQuickActions();
+        }}
         hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         android_ripple={{ color: "rgba(255,69,0,0.2)", borderless: true }}
       >
@@ -141,8 +156,13 @@ const CustomTabBar = memo(function CustomTabBar({ state, descriptors, navigation
         testID="tab-progress"
         accessibilityRole="button"
         style={styles.tabItem}
-        onPressIn={() => console.log("[Tab] progress pressIn")}
-        onPress={showProgressMenu}
+        onPressIn={() => {
+          console.log("[Tab] progress pressIn");
+          if (Platform.OS === 'android') showProgressMenu();
+        }}
+        onPress={() => {
+          if (Platform.OS !== 'android') showProgressMenu();
+        }}
         hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         android_ripple={{ color: "rgba(255,69,0,0.15)", borderless: false }}
       >
@@ -164,8 +184,13 @@ const CustomTabBar = memo(function CustomTabBar({ state, descriptors, navigation
         testID="tab-more"
         accessibilityRole="button"
         style={styles.tabItem}
-        onPressIn={() => console.log("[Tab] more pressIn")}
-        onPress={showMoreMenu}
+        onPressIn={() => {
+          console.log("[Tab] more pressIn");
+          if (Platform.OS === 'android') showMoreMenu();
+        }}
+        onPress={() => {
+          if (Platform.OS !== 'android') showMoreMenu();
+        }}
         hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         android_ripple={{ color: "rgba(255,69,0,0.15)", borderless: false }}
       >

@@ -307,8 +307,13 @@ function DashboardScreenInner() {
                   key={index}
                   testID={`metric-${index}`}
                   accessibilityRole="button"
-                  onPressIn={() => console.log(`[Metric] pressIn ${route}`)}
-                  onPress={() => navigateWithHaptics(route)}
+                  onPressIn={() => {
+                    console.log(`[Metric] pressIn ${route}`);
+                    if (Platform.OS === 'android') navigateWithHaptics(route);
+                  }}
+                  onPress={() => {
+                    if (Platform.OS !== 'android') navigateWithHaptics(route);
+                  }}
                   android_ripple={{ color: "rgba(255,69,0,0.12)", borderless: false }}
                   style={styles.metricCard}
                 >
@@ -331,8 +336,13 @@ function DashboardScreenInner() {
             <Pressable
               testID="qa-log-progress"
               accessibilityRole="button"
-              onPressIn={() => console.log("[QA] log progress pressIn")}
-              onPress={() => navigateWithHaptics("goals")}
+              onPressIn={() => {
+                console.log("[QA] log progress pressIn");
+                if (Platform.OS === 'android') navigateWithHaptics("goals");
+              }}
+              onPress={() => {
+                if (Platform.OS !== 'android') navigateWithHaptics("goals");
+              }}
               android_ripple={{ color: "rgba(255,69,0,0.15)", borderless: false }}
               style={styles.actionButton}
             >
@@ -346,8 +356,13 @@ function DashboardScreenInner() {
             <Pressable
               testID="qa-weekly-report"
               accessibilityRole="button"
-              onPressIn={() => console.log("[QA] weekly report pressIn")}
-              onPress={() => navigateWithHaptics("insights")}
+              onPressIn={() => {
+                console.log("[QA] weekly report pressIn");
+                if (Platform.OS === 'android') navigateWithHaptics("insights");
+              }}
+              onPress={() => {
+                if (Platform.OS !== 'android') navigateWithHaptics("insights");
+              }}
               android_ripple={{ color: "rgba(255,69,0,0.15)", borderless: false }}
               style={styles.actionButton}
             >
