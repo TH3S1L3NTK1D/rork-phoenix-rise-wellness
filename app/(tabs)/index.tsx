@@ -16,6 +16,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Flame, Target, Utensils, Pill, Shield } from "lucide-react-native";
 import { useWellness } from "@/providers/WellnessProvider";
 import { useRouter } from "expo-router";
+import { TABS_ROUTES, TabRouteKey } from "@/constants/routes";
 import * as Haptics from "expo-haptics";
 
 const { width } = Dimensions.get('window');
@@ -66,9 +67,9 @@ function DashboardScreenInner() {
   const scaleAnim = React.useRef(new Animated.Value(1)).current;
   const progressAnim = React.useRef(new Animated.Value(0)).current;
 
-  const navigateWithHaptics = React.useCallback(async (route: string) => {
+  const navigateWithHaptics = React.useCallback(async (route: TabRouteKey) => {
     try {
-      router.replace(`/${route}`);
+      router.replace(TABS_ROUTES[route]);
       if (Platform.OS !== "web") {
         requestAnimationFrame(async () => {
           try {
@@ -300,7 +301,7 @@ function DashboardScreenInner() {
           {/* Metric Cards */}
           <View style={styles.metricsGrid}>
             {metricCards.map((metric, index) => {
-              const route = index === 0 ? "meal-prep" : index === 1 ? "insights" : index === 2 ? "supplements" : "goals";
+              const route = (index === 0 ? "meal-prep" : index === 1 ? "insights" : index === 2 ? "supplements" : "goals") as TabRouteKey;
               return (
                 <Pressable
                   key={index}

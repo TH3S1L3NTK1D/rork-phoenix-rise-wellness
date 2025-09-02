@@ -1,4 +1,5 @@
 import { Tabs, router } from "expo-router";
+import { TABS_ROUTES, TabRouteKey } from "@/constants/routes";
 import { Home, UtensilsCrossed, Plus, MoreHorizontal, TrendingUp } from "lucide-react-native";
 import React, { memo, useCallback, useState } from "react";
 import { Platform, StyleSheet, Text, Pressable, View, Alert, AlertButton } from "react-native";
@@ -6,9 +7,9 @@ import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
 
 const CustomTabBar = memo(function CustomTabBar({ state, descriptors, navigation }: any) {
-  const navigateToRoute = useCallback(async (routeName: string) => {
+  const navigateToRoute = useCallback(async (routeName: TabRouteKey) => {
     try {
-      router.replace(`/${routeName}`);
+      router.replace(TABS_ROUTES[routeName]);
       if (Platform.OS !== "web") {
         requestAnimationFrame(async () => {
           try {
@@ -24,7 +25,7 @@ const CustomTabBar = memo(function CustomTabBar({ state, descriptors, navigation
   }, []);
 
   const openMenu = useCallback(
-    async (title: string, message: string, options: { label: string; route: string }[]) => {
+    async (title: string, message: string, options: { label: string; route: TabRouteKey }[]) => {
       const buttons: AlertButton[] = options.map((option) => ({
         text: option.label,
         onPress: () => navigateToRoute(option.route),
@@ -46,9 +47,9 @@ const CustomTabBar = memo(function CustomTabBar({ state, descriptors, navigation
   const showTrackMenu = useCallback(
     () =>
       openMenu("Track", "What would you like to track?", [
-        { label: "Meals", route: "meal-prep" },
-        { label: "Supplements", route: "supplements" },
-        { label: "Breaking Chains", route: "addiction" },
+        { label: "Meals", route: "meal-prep" as TabRouteKey },
+        { label: "Supplements", route: "supplements" as TabRouteKey },
+        { label: "Breaking Chains", route: "addiction" as TabRouteKey },
       ]),
     [openMenu]
   );
@@ -56,9 +57,9 @@ const CustomTabBar = memo(function CustomTabBar({ state, descriptors, navigation
   const showProgressMenu = useCallback(
     () =>
       openMenu("Progress", "What would you like to view?", [
-        { label: "Goals", route: "goals" },
-        { label: "Insights", route: "insights" },
-        { label: "Analytics", route: "analytics" },
+        { label: "Goals", route: "goals" as TabRouteKey },
+        { label: "Insights", route: "insights" as TabRouteKey },
+        { label: "Analytics", route: "analytics" as TabRouteKey },
       ]),
     [openMenu]
   );
@@ -66,22 +67,22 @@ const CustomTabBar = memo(function CustomTabBar({ state, descriptors, navigation
   const showMoreMenu = useCallback(
     () =>
       openMenu("More", "What would you like to access?", [
-        { label: "Journal", route: "journal" },
-        { label: "Coach", route: "coach" },
-        { label: "Vision Board", route: "vision" },
-        { label: "Routines", route: "routines" },
-        { label: "Meditation", route: "meditation" },
-        { label: "Settings", route: "settings" },
+        { label: "Journal", route: "journal" as TabRouteKey },
+        { label: "Coach", route: "coach" as TabRouteKey },
+        { label: "Vision Board", route: "vision" as TabRouteKey },
+        { label: "Routines", route: "routines" as TabRouteKey },
+        { label: "Meditation", route: "meditation" as TabRouteKey },
+        { label: "Settings", route: "settings" as TabRouteKey },
       ]),
     [openMenu]
   );
 
   const showQuickActions = useCallback(async () => {
     openMenu("Quick Actions", "What would you like to do?", [
-      { label: "Log Meal", route: "meal-prep" },
-      { label: "Track Day", route: "goals" },
-      { label: "Journal", route: "journal" },
-      { label: "Add Goal", route: "goals" },
+      { label: "Log Meal", route: "meal-prep" as TabRouteKey },
+      { label: "Track Day", route: "goals" as TabRouteKey },
+      { label: "Journal", route: "journal" as TabRouteKey },
+      { label: "Add Goal", route: "goals" as TabRouteKey },
     ]);
   }, [openMenu]);
 
