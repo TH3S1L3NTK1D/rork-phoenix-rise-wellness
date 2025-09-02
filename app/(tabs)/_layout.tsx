@@ -1,15 +1,20 @@
 import { Tabs, router } from "expo-router";
 import { TABS_ROUTES, TabRouteKey } from "@/constants/routes";
-import { Home, UtensilsCrossed, Plus, MoreHorizontal, TrendingUp } from "lucide-react-native";
-import React, { memo, useCallback, useState } from "react";
-import { Platform, StyleSheet, Text, Pressable, View, Alert, AlertButton } from "react-native";
+import { Home, UtensilsCrossed, Plus, MoreHorizontal, TrendingUp, ChevronRight } from "lucide-react-native";
+import React, { memo, useCallback, useMemo, useState } from "react";
+import { Platform, StyleSheet, Text, Pressable, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
 
-const CustomTabBar = memo(function CustomTabBar({ state, descriptors, navigation }: any) {
+const TAB_BAR_HEIGHT = Platform.OS === "ios" ? 90 : 65;
+
+const CustomTabBar = memo(function CustomTabBar({ state }: any) {
+  const [openPanel, setOpenPanel] = useState<null | "track" | "progress" | "more" | "quick">(null);
+
   const navigateToRoute = useCallback(async (routeName: TabRouteKey) => {
     try {
       router.replace(TABS_ROUTES[routeName]);
+      setOpenPanel(null);
       if (Platform.OS !== "web") {
         requestAnimationFrame(async () => {
           try {
@@ -24,194 +29,201 @@ const CustomTabBar = memo(function CustomTabBar({ state, descriptors, navigation
     }
   }, []);
 
-  const openMenu = useCallback(
-    async (title: string, message: string, options: { label: string; route: TabRouteKey }[]) => {
-      const buttons: AlertButton[] = options.map((option) => ({
-        text: option.label,
-        onPress: () => navigateToRoute(option.route),
-      }));
-      buttons.push({ text: "Cancel", style: "cancel" });
-      try {
-        Alert.alert(title, message, buttons);
-      } catch (e) {
-        console.warn("[Tabs] Alert failed", e);
-        if (Platform.OS === "web") {
-          const first = options[0];
-          if (first) navigateToRoute(first.route);
-        }
-      }
-    },
-    [navigateToRoute]
+  const trackOptions = useMemo(
+    () => [
+      { label: "Meals", route: "meal-prep" as TabRouteKey },
+      { label: "Supplements", route: "supplements" as TabRouteKey },
+      { label: "Breaking Chains", route: "addiction" as TabRouteKey },
+    ],
+    []
   );
 
-  const showTrackMenu = useCallback(
-    () =>
-      openMenu("Track", "What would you like to track?", [
-        { label: "Meals", route: "meal-prep" as TabRouteKey },
-        { label: "Supplements", route: "supplements" as TabRouteKey },
-        { label: "Breaking Chains", route: "addiction" as TabRouteKey },
-      ]),
-    [openMenu]
+  const progressOptions = useMemo(
+    () => [
+      { label: "Goals", route: "goals" as TabRouteKey },
+      { label: "Insights", route: "insights" as TabRouteKey },
+      { label: "Analytics", route: "analytics" as TabRouteKey },
+    ],
+    []
   );
 
-  const showProgressMenu = useCallback(
-    () =>
-      openMenu("Progress", "What would you like to view?", [
-        { label: "Goals", route: "goals" as TabRouteKey },
-        { label: "Insights", route: "insights" as TabRouteKey },
-        { label: "Analytics", route: "analytics" as TabRouteKey },
-      ]),
-    [openMenu]
+  const moreOptions = useMemo(
+    () => [
+      { label: "Journal", route: "journal" as TabRouteKey },
+      { label: "Coach", route: "coach" as TabRouteKey },
+      { label: "Vision Board", route: "vision" as TabRouteKey },
+      { label: "Routines", route: "routines" as TabRouteKey },
+      { label: "Meditation", route: "meditation" as TabRouteKey },
+      { label: "Settings", route: "settings" as TabRouteKey },
+    ],
+    []
   );
 
-  const showMoreMenu = useCallback(
-    () =>
-      openMenu("More", "What would you like to access?", [
-        { label: "Journal", route: "journal" as TabRouteKey },
-        { label: "Coach", route: "coach" as TabRouteKey },
-        { label: "Vision Board", route: "vision" as TabRouteKey },
-        { label: "Routines", route: "routines" as TabRouteKey },
-        { label: "Meditation", route: "meditation" as TabRouteKey },
-        { label: "Settings", route: "settings" as TabRouteKey },
-      ]),
-    [openMenu]
-  );
-
-  const showQuickActions = useCallback(async () => {
-    openMenu("Quick Actions", "What would you like to do?", [
+  const quickOptions = useMemo(
+    () => [
       { label: "Log Meal", route: "meal-prep" as TabRouteKey },
       { label: "Track Day", route: "goals" as TabRouteKey },
       { label: "Journal", route: "journal" as TabRouteKey },
       { label: "Add Goal", route: "goals" as TabRouteKey },
-    ]);
-  }, [openMenu]);
+    ],
+    []
+  );
 
   const currentRoute: string = state.routes[state.index]?.name ?? "index";
 
   return (
-    <LinearGradient colors={["#1A2B3C", "#003366"]} style={styles.tabBar}>
-      <Pressable
-        testID="tab-home"
-        accessibilityRole="button"
-        style={styles.tabItem}
-        onPressIn={() => {
-          console.log("[Tab] home pressIn");
-          if (Platform.OS === 'android') navigateToRoute("index");
-        }}
-        onPress={() => {
-          if (Platform.OS !== 'android') navigateToRoute("index");
-        }}
-        android_ripple={{ color: "rgba(255,69,0,0.15)", borderless: false }}
-      >
-        <Home size={28} color={currentRoute === "index" ? "#FF4500" : "#8aa"} />
-        <Text style={[styles.tabLabel, { color: currentRoute === "index" ? "#FF4500" : "#8aa" }]}>Home</Text>
-      </Pressable>
-
-      <Pressable
-        testID="tab-track"
-        accessibilityRole="button"
-        style={styles.tabItem}
-        onPressIn={() => {
-          console.log("[Tab] track pressIn");
-          if (Platform.OS === 'android') showTrackMenu();
-        }}
-        onPress={() => {
-          if (Platform.OS !== 'android') showTrackMenu();
-        }}
-        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-        android_ripple={{ color: "rgba(255,69,0,0.15)", borderless: false }}
-      >
-        <UtensilsCrossed
-          size={28}
-          color={["meal-prep", "supplements", "addiction"].includes(currentRoute) ? "#FF4500" : "#8aa"}
-        />
-        <Text
-          style={[
-            styles.tabLabel,
-            { color: ["meal-prep", "supplements", "addiction"].includes(currentRoute) ? "#FF4500" : "#8aa" },
-          ]}
+    <>
+      {openPanel && (
+        <Pressable
+          testID="tabbar-overlay"
+          style={[StyleSheet.absoluteFill, styles.overlay]}
+          onPress={() => {
+            console.log("[Tab] overlay press");
+            setOpenPanel(null);
+          }}
+          pointerEvents="auto"
         >
-          Track
-        </Text>
-      </Pressable>
+          <View pointerEvents="box-none" style={[styles.panelContainer, { bottom: TAB_BAR_HEIGHT }]}> 
+            {openPanel === "track" && (
+              <DropdownPanel title="Track" options={trackOptions} onSelect={navigateToRoute} />
+            )}
+            {openPanel === "progress" && (
+              <DropdownPanel title="Progress" options={progressOptions} onSelect={navigateToRoute} />
+            )}
+            {openPanel === "more" && (
+              <DropdownPanel title="More" options={moreOptions} onSelect={navigateToRoute} />
+            )}
+            {openPanel === "quick" && (
+              <DropdownPanel title="Quick Actions" options={quickOptions} onSelect={navigateToRoute} />
+            )}
+          </View>
+        </Pressable>
+      )}
 
-      <Pressable
-        testID="tab-quick"
-        accessibilityRole="button"
-        style={styles.centerButton}
-        onPressIn={() => {
-          console.log("[Tab] quick pressIn");
-          if (Platform.OS === 'android') showQuickActions();
-        }}
-        onPress={() => {
-          if (Platform.OS !== 'android') showQuickActions();
-        }}
-        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-        android_ripple={{ color: "rgba(255,69,0,0.2)", borderless: true }}
-      >
-        <MemoizedCenterButton />
-      </Pressable>
-
-      <Pressable
-        testID="tab-progress"
-        accessibilityRole="button"
-        style={styles.tabItem}
-        onPressIn={() => {
-          console.log("[Tab] progress pressIn");
-          if (Platform.OS === 'android') showProgressMenu();
-        }}
-        onPress={() => {
-          if (Platform.OS !== 'android') showProgressMenu();
-        }}
-        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-        android_ripple={{ color: "rgba(255,69,0,0.15)", borderless: false }}
-      >
-        <TrendingUp
-          size={28}
-          color={["goals", "insights", "analytics"].includes(currentRoute) ? "#FF4500" : "#8aa"}
-        />
-        <Text
-          style={[
-            styles.tabLabel,
-            { color: ["goals", "insights", "analytics"].includes(currentRoute) ? "#FF4500" : "#8aa" },
-          ]}
+      <LinearGradient colors={["#1A2B3C", "#003366"]} style={styles.tabBar}>
+        <Pressable
+          testID="tab-home"
+          accessibilityRole="button"
+          style={styles.tabItem}
+          onPressIn={() => {
+            console.log("[Tab] home pressIn");
+            if (Platform.OS === 'android') navigateToRoute("index");
+          }}
+          onPress={() => {
+            if (Platform.OS !== 'android') navigateToRoute("index");
+          }}
+          android_ripple={{ color: "rgba(255,69,0,0.15)", borderless: false }}
         >
-          Progress
-        </Text>
-      </Pressable>
+          <Home size={28} color={currentRoute === "index" ? "#FF4500" : "#8aa"} />
+          <Text style={[styles.tabLabel, { color: currentRoute === "index" ? "#FF4500" : "#8aa" }]}>Home</Text>
+        </Pressable>
 
-      <Pressable
-        testID="tab-more"
-        accessibilityRole="button"
-        style={styles.tabItem}
-        onPressIn={() => {
-          console.log("[Tab] more pressIn");
-          if (Platform.OS === 'android') showMoreMenu();
-        }}
-        onPress={() => {
-          if (Platform.OS !== 'android') showMoreMenu();
-        }}
-        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-        android_ripple={{ color: "rgba(255,69,0,0.15)", borderless: false }}
-      >
-        <MoreHorizontal
-          size={28}
-          color={["journal", "coach", "vision", "routines", "meditation", "settings"].includes(currentRoute) ? "#FF4500" : "#8aa"}
-        />
-        <Text
-          style={[
-            styles.tabLabel,
-            {
-              color: ["journal", "coach", "vision", "routines", "meditation", "settings"].includes(currentRoute)
-                ? "#FF4500"
-                : "#8aa",
-            },
-          ]}
+        <Pressable
+          testID="tab-track"
+          accessibilityRole="button"
+          style={styles.tabItem}
+          onPressIn={() => {
+            console.log("[Tab] track pressIn");
+            if (Platform.OS === 'android') setOpenPanel(openPanel === 'track' ? null : 'track');
+          }}
+          onPress={() => {
+            if (Platform.OS !== 'android') setOpenPanel(openPanel === 'track' ? null : 'track');
+          }}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          android_ripple={{ color: "rgba(255,69,0,0.15)", borderless: false }}
         >
-          More
-        </Text>
-      </Pressable>
-    </LinearGradient>
+          <UtensilsCrossed
+            size={28}
+            color={["meal-prep", "supplements", "addiction"].includes(currentRoute) ? "#FF4500" : "#8aa"}
+          />
+          <Text
+            style={[
+              styles.tabLabel,
+              { color: ["meal-prep", "supplements", "addiction"].includes(currentRoute) ? "#FF4500" : "#8aa" },
+            ]}
+          >
+            Track
+          </Text>
+        </Pressable>
+
+        <Pressable
+          testID="tab-quick"
+          accessibilityRole="button"
+          style={styles.centerButton}
+          onPressIn={() => {
+            console.log("[Tab] quick pressIn");
+            if (Platform.OS === 'android') setOpenPanel(openPanel === 'quick' ? null : 'quick');
+          }}
+          onPress={() => {
+            if (Platform.OS !== 'android') setOpenPanel(openPanel === 'quick' ? null : 'quick');
+          }}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          android_ripple={{ color: "rgba(255,69,0,0.2)", borderless: true }}
+        >
+          <MemoizedCenterButton />
+        </Pressable>
+
+        <Pressable
+          testID="tab-progress"
+          accessibilityRole="button"
+          style={styles.tabItem}
+          onPressIn={() => {
+            console.log("[Tab] progress pressIn");
+            if (Platform.OS === 'android') setOpenPanel(openPanel === 'progress' ? null : 'progress');
+          }}
+          onPress={() => {
+            if (Platform.OS !== 'android') setOpenPanel(openPanel === 'progress' ? null : 'progress');
+          }}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          android_ripple={{ color: "rgba(255,69,0,0.15)", borderless: false }}
+        >
+          <TrendingUp
+            size={28}
+            color={["goals", "insights", "analytics"].includes(currentRoute) ? "#FF4500" : "#8aa"}
+          />
+          <Text
+            style={[
+              styles.tabLabel,
+              { color: ["goals", "insights", "analytics"].includes(currentRoute) ? "#FF4500" : "#8aa" },
+            ]}
+          >
+            Progress
+          </Text>
+        </Pressable>
+
+        <Pressable
+          testID="tab-more"
+          accessibilityRole="button"
+          style={styles.tabItem}
+          onPressIn={() => {
+            console.log("[Tab] more pressIn");
+            if (Platform.OS === 'android') setOpenPanel(openPanel === 'more' ? null : 'more');
+          }}
+          onPress={() => {
+            if (Platform.OS !== 'android') setOpenPanel(openPanel === 'more' ? null : 'more');
+          }}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          android_ripple={{ color: "rgba(255,69,0,0.15)", borderless: false }}
+        >
+          <MoreHorizontal
+            size={28}
+            color={["journal", "coach", "vision", "routines", "meditation", "settings"].includes(currentRoute) ? "#FF4500" : "#8aa"}
+          />
+          <Text
+            style={[
+              styles.tabLabel,
+              {
+                color: ["journal", "coach", "vision", "routines", "meditation", "settings"].includes(currentRoute)
+                  ? "#FF4500"
+                  : "#8aa",
+              },
+            ]}
+          >
+            More
+          </Text>
+        </Pressable>
+      </LinearGradient>
+    </>
   );
 });
 
@@ -223,10 +235,40 @@ const MemoizedCenterButton = memo(function MemoizedCenterButton() {
   );
 });
 
+interface DropdownOption { label: string; route: TabRouteKey }
+
+const DropdownPanel = memo(function DropdownPanel({
+  title,
+  options,
+  onSelect,
+}: {
+  title: string;
+  options: DropdownOption[];
+  onSelect: (route: TabRouteKey) => void;
+}) {
+  return (
+    <View testID={`dropdown-${title}`} style={styles.panel} pointerEvents="auto">
+      <Text style={styles.panelTitle}>{title}</Text>
+      {options.map((opt) => (
+        <Pressable
+          key={opt.label}
+          style={styles.panelItem}
+          onPress={() => onSelect(opt.route)}
+          onPressIn={Platform.OS === 'android' ? () => onSelect(opt.route) : undefined}
+          testID={`dropdown-item-${opt.label}`}
+        >
+          <Text style={styles.panelItemText}>{opt.label}</Text>
+          <ChevronRight size={18} color="#334" />
+        </Pressable>
+      ))}
+    </View>
+  );
+});
+
 const styles = StyleSheet.create({
   tabBar: {
     flexDirection: "row",
-    height: Platform.OS === "ios" ? 90 : 65,
+    height: TAB_BAR_HEIGHT,
     paddingBottom: Platform.OS === "ios" ? 25 : 8,
     paddingTop: 8,
     paddingHorizontal: 10,
@@ -260,6 +302,51 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 8,
+  },
+  overlay: {
+    zIndex: 1000,
+    backgroundColor: Platform.OS === 'android' ? 'rgba(0,0,0,0.1)' : 'transparent',
+  },
+  panelContainer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    zIndex: 1001,
+    paddingHorizontal: 12,
+    paddingBottom: 12,
+  },
+  panel: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    marginHorizontal: 12,
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+  },
+  panelTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#334',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    opacity: 0.7,
+  },
+  panelItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+  },
+  panelItemText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#122',
   },
 });
 
