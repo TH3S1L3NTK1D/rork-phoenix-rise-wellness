@@ -9,11 +9,20 @@ export class PWAManager {
   private static instance: PWAManager;
   private serviceWorker: ServiceWorkerRegistration | null = null;
   private installPrompt: PWAInstallPrompt | null = null;
+  private updateIntervalId: number | null = null;
 
   private constructor() {
     if (Platform.OS === 'web') {
       this.initializeServiceWorker();
       this.setupInstallPromptListener();
+      if (typeof document !== 'undefined') {
+        document.addEventListener('visibilitychange', () => {
+          if (document.visibilityState !== 'visible' && this.updateIntervalId) {
+            clearInterval(this.updateIntervalId);
+            this.updateIntervalId = null;
+          }
+        });
+      }
     }
   }
 
@@ -38,7 +47,11 @@ export class PWAManager {
     try {
       try {
         const regs = await navigator.serviceWorker.getRegistrations();
-        await Promise.all(regs.filter(r => r.active && r.active.scriptURL.endsWith('/sw.js')).map(r => r.unregister()));
+        await Promise.all(
+          regs
+            .filter((r) => r.active && r.active.scriptURL.endsWith('/sw.js'))
+            .map((r) => r.unregister())
+        );
         console.log('Phoenix Rise PWA: Unregistered legacy /sw.js');
       } catch (e) {
         console.warn('Phoenix Rise PWA: Failed to check/unregister legacy SW', e);
@@ -66,15 +79,19 @@ export class PWAManager {
       });
 
       if (process.env.NODE_ENV === 'production') {
-        setInterval(() => {
+        if (this.updateIntervalId) {
+          clearInterval(this.updateIntervalId);
+          this.updateIntervalId = null;
+        }
+        this.updateIntervalId = window.setInterval(() => {
           try {
+            if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
             registration.update();
           } catch (err) {
             console.log('Phoenix Rise PWA: SW update check skipped', err);
           }
-        }, 60000);
+        }, 15 * 60 * 1000);
       }
-
     } catch (error) {
       console.error('Phoenix Rise PWA: Service Worker registration failed:', error);
     }
@@ -100,7 +117,7 @@ export class PWAManager {
       console.log('Phoenix Rise PWA: Install only available on web platform');
       return false;
     }
-    
+
     if (!this.installPrompt) {
       console.log('Phoenix Rise PWA: No install prompt available');
       return false;
@@ -109,7 +126,7 @@ export class PWAManager {
     try {
       await this.installPrompt.prompt();
       const choiceResult = await this.installPrompt.userChoice;
-      
+
       if (choiceResult.outcome === 'accepted') {
         console.log('Phoenix Rise PWA: User accepted install');
         return true;
@@ -129,10 +146,10 @@ export class PWAManager {
 
   public isInstalled(): boolean {
     if (typeof window === 'undefined') return false;
-    
+
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
     const isInWebAppiOS = (window.navigator as any).standalone === true;
-    
+
     return isStandalone || isInWebAppiOS;
   }
 
@@ -164,9 +181,9 @@ export class PWAManager {
       console.log('Phoenix Rise PWA: Notifications only supported on web platform');
       return;
     }
-    
+
     const permission = await this.requestNotificationPermission();
-    
+
     if (permission !== 'granted') {
       console.log('Phoenix Rise PWA: Notification permission denied');
       return;
@@ -174,14 +191,12 @@ export class PWAManager {
 
     try {
       if (this.serviceWorker) {
-        // Use service worker for better notification handling
         this.serviceWorker.showNotification(title, {
           icon: '/assets/images/icon-192.png',
           badge: '/assets/images/icon-72.png',
           ...options,
         });
       } else {
-        // Fallback to regular notification
         new Notification(title, {
           icon: '/assets/images/icon-192.png',
           ...options,
@@ -198,7 +213,6 @@ export class PWAManager {
       return;
     }
 
-    // Store reminder in localStorage for service worker to access
     const reminders = JSON.parse(localStorage.getItem('wellness-reminders') || '[]');
     reminders.push({
       id: Date.now(),
@@ -218,7 +232,6 @@ export class PWAManager {
     }
 
     try {
-      // Check if sync is supported
       if ('sync' in window.ServiceWorkerRegistration.prototype) {
         await (this.serviceWorker as any).sync.register('wellness-data-sync');
         console.log('Phoenix Rise PWA: Background sync registered');
@@ -257,11 +270,11 @@ export class PWAManager {
     try {
       const cache = await caches.open('phoenix-rise-wellness-v1.0.1');
       const response = await cache.match('/offline-wellness-data');
-      
+
       if (response) {
         return await response.json();
       }
-      
+
       return null;
     } catch (error) {
       console.error('Phoenix Rise PWA: Failed to get offline wellness data:', error);
@@ -283,7 +296,11 @@ export class PWAManager {
 
     const newWorker = this.serviceWorker.waiting;
     if (newWorker) {
-      newWorker.postMessage({ type: 'SKIP_WAITING' });
+      try {
+        newWorker.postMessage({ type: 'SKIP_WAITING' });
+      } catch (e) {
+        console.warn('Phoenix Rise PWA: Failed to postMessage to SW', e);
+      }
       window.location.reload();
     }
   }
@@ -300,24 +317,19 @@ export class PWAManager {
         resolve(event.data.version || 'unknown');
       };
 
-      this.serviceWorker.active?.postMessage(
-        { type: 'GET_VERSION' },
-        [messageChannel.port2]
-      );
+      this.serviceWorker.active?.postMessage({ type: 'GET_VERSION' }, [messageChannel.port2]);
     });
   }
 }
 
-// Export singleton instance
 export const pwaManager = PWAManager.getInstance();
 
-// Utility functions for easy access
 export const installPWA = () => pwaManager.installApp();
 export const isPWAInstallable = () => pwaManager.isInstallable();
 export const isPWAInstalled = () => pwaManager.isInstalled();
-export const showWellnessNotification = (title: string, options?: NotificationOptions) => 
+export const showWellnessNotification = (title: string, options?: NotificationOptions) =>
   pwaManager.showNotification(title, options);
-export const scheduleWellnessReminder = (time: string, message: string) => 
+export const scheduleWellnessReminder = (time: string, message: string) =>
   pwaManager.scheduleWellnessReminder(time, message);
 export const syncWellnessData = () => pwaManager.syncOfflineData();
 export const cacheWellnessData = (data: any) => pwaManager.cacheWellnessData(data);
