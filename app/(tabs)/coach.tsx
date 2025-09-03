@@ -52,7 +52,7 @@ interface VoiceSettings {
   emotionalIntelligenceEnabled: boolean;
 }
 
-export default function PhoenixCoach() {
+function PhoenixCoach() {
   const {
     chatMessages,
     addChatMessage,
@@ -569,15 +569,18 @@ export default function PhoenixCoach() {
       }
 
       const clonedPath = await AsyncStorage.getItem('@phoenix_cloned_voice_path');
-      const clonedVoiceId = await AsyncStorage.getItem('@phoenix_cloned_voice_id');
+      const storedVoiceId = await AsyncStorage.getItem('@phoenix_elevenlabs_voice_id');
+      const voiceId = (storedVoiceId ?? 'your_voice_id_here').trim();
+
+      const endpoint = `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`;
 
       const body = {
         text,
-        voice_id: clonedVoiceId || 'default_voice_id',
+        voice_settings: {
+          stability: 0.5,
+          similarity_boost: 0.75,
+        },
       } as const;
-
-      const voiceId = clonedVoiceId || 'default_voice_id';
-      const endpoint = `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`;
 
       const res = await fetch(endpoint, {
         method: 'POST',
@@ -1847,6 +1850,41 @@ export default function PhoenixCoach() {
     </LinearGradient>
   );
 }
+
+class CoachErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean; error?: unknown }> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError(error: unknown) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error: unknown, info: any) {
+    console.log('[Coach] ErrorBoundary caught', { error, info });
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <Text testID="coach-error" style={{ color: 'white', fontSize: 16, textAlign: 'center' }}>
+            Something went wrong in Coach. Please try again.
+          </Text>
+        </View>
+      );
+    }
+    return this.props.children as any;
+  }
+}
+
+function PhoenixCoachScreen() {
+  return (
+    <CoachErrorBoundary>
+      <PhoenixCoach />
+    </CoachErrorBoundary>
+  );
+}
+
+export default React.memo(PhoenixCoachScreen);
 
 const styles = StyleSheet.create({
   container: {
