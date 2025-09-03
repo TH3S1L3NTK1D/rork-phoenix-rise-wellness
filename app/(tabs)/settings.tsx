@@ -18,6 +18,8 @@ import { User, Database, Download, Trash2, Save, Award, Palette, RotateCcw, Mic,
 import { useWellness, PRESET_THEMES, Theme, ThemeColors } from "@/providers/WellnessProvider";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as DocumentPicker from 'expo-document-picker';
+import { Audio as ExpoAudio } from 'expo-av';
+import * as FileSystem from 'expo-file-system';
 
 interface UserProfile {
   name: string;
@@ -503,7 +505,7 @@ function SettingsScreen() {
     }
     
     if (Platform.OS === 'web') {
-      const audio = new Audio(audioData);
+      const audio = new (window as any).Audio(audioData);
       audio.onended = () => {
         setPlayingAudio(null);
         setPlayingSampleIndex(null);
@@ -656,39 +658,85 @@ function SettingsScreen() {
     }
   };
 
-  const testClonedVoice = () => {
-    const testPhrase = "Testing Phoenix voice. Can you hear me?";
-    
-    if (Platform.OS === 'web' && 'speechSynthesis' in window) {
-      const utterance = new SpeechSynthesisUtterance(testPhrase);
-      utterance.rate = 1.0;
-      utterance.pitch = 1.0;
-      utterance.volume = 1.0;
-      const voices = window.speechSynthesis.getVoices();
-      if (voices.length > 0) {
-        const femaleVoice = voices.find(voice => 
-          voice.name.toLowerCase().includes('female') || 
-          voice.name.toLowerCase().includes('samantha') ||
-          voice.name.toLowerCase().includes('karen') ||
-          voice.name.toLowerCase().includes('victoria')
-        );
-        if (femaleVoice) {
-          utterance.voice = femaleVoice;
-        } else {
-          utterance.voice = voices[0];
-        }
+  const testClonedVoice = async () => {
+    try {
+      const key = (elevenLabsApiKeyLocal || elevenLabsApiKey || '').trim();
+      if (!key) {
+        Alert.alert('Missing API Key', 'Please enter and save your ElevenLabs API key first.');
+        return;
       }
-      window.speechSynthesis.speak(utterance);
-      utterance.onend = () => {
-        Alert.alert('Voice Test', 'If you heard the voice, it\'s working! This is using browser text-to-speech. Once you create a voice clone, Phoenix will use your custom voice.');
-      };
-      utterance.onerror = () => {
-        Alert.alert('Error', 'Failed to play test voice. Please check your browser\'s audio settings.');
-      };
-    } else {
-      Alert.alert('Not Supported', 'Voice testing is only available on web browsers.');
+
+      const text = 'This is a test';
+      const voiceId = 'ahvd0TWxmVC87GTyJn2P';
+
+      console.log('[Settings] Sending ElevenLabs TTS test request', { voiceId, textLen: text.length });
+
+      const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
+        method: 'POST',
+        headers: {
+          'xi-api-key': key,
+          'Content-Type': 'application/json',
+          'accept': 'audio/mpeg',
+        },
+        body: JSON.stringify({
+          text,
+          voice_settings: { stability: 0.5, similarity_boost: 0.75 },
+        }),
+      });
+
+      if (!response.ok) {
+        const errText = await response.text().catch(() => '');
+        console.log('[Settings] ElevenLabs TTS error', response.status, errText);
+        Alert.alert('TTS Error', `Failed to generate audio (${response.status}).`);
+        return;
+      }
+
+      if (Platform.OS === 'web') {
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const audio = new (window as any).Audio(url);
+        audio.onended = () => {
+          URL.revokeObjectURL(url);
+          console.log('[Settings] Web audio ended');
+        };
+        audio.onerror = (e: unknown) => {
+          console.log('[Settings] Web audio error', e);
+        };
+        console.log('[Settings] Playing web audio');
+        await audio.play();
+        return;
+      }
+
+      const arrayBuffer = await response.arrayBuffer();
+      const base64 = arrayBufferToBase64(arrayBuffer);
+      const fileUri = FileSystem.cacheDirectory + 'anuna-test.mp3';
+      await FileSystem.writeAsStringAsync(fileUri, base64, { encoding: FileSystem.EncodingType.Base64 });
+      console.log('[Settings] Saved audio to', fileUri);
+
+      const { sound } = await ExpoAudio.Sound.createAsync({ uri: fileUri }, { shouldPlay: true });
+      sound.setOnPlaybackStatusUpdate((status) => {
+        const s = status as any;
+        if (s?.didJustFinish) {
+          sound.unloadAsync();
+          console.log('[Settings] Mobile audio finished');
+        }
+      });
+    } catch (e) {
+      console.log('[Settings] Test cloned voice error', e);
+      Alert.alert('Error', 'Failed to play test audio.');
     }
   };
+
+  function arrayBufferToBase64(buffer: ArrayBuffer): string {
+    let binary = '';
+    const bytes = new Uint8Array(buffer);
+    const len = bytes.byteLength;
+    for (let i = 0; i < len; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    // btoa is available in JS runtime
+    return typeof btoa !== 'undefined' ? btoa(binary) : Buffer.from(binary, 'binary').toString('base64');
+  }
 
   const deleteVoiceClone = async () => {
     if (!clonedVoiceId || !elevenLabsApiKey.trim()) {
