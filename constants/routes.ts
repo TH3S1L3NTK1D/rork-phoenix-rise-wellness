@@ -9,8 +9,6 @@ export const TABS_ROUTES = {
   routines: "/(tabs)/routines",
   insights: "/(tabs)/insights",
   analytics: "/(tabs)/analytics",
-
-  meditation: "/(tabs)/meditation",
   settings: "/(tabs)/settings",
   "test-android": "/(tabs)/test-android",
 } as const;
