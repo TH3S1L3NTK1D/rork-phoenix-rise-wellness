@@ -28,7 +28,7 @@ interface UserProfile {
 
 const PROFILE_STORAGE_KEY = "@phoenix_user_profile";
 
-export default function SettingsScreen() {
+function SettingsScreen() {
   const { phoenixPoints, meals, extendedMeals, goals, journalEntries, supplements, addictions, currentTheme, updateTheme, resetToPhoenixTheme, elevenLabsApiKey, updateElevenLabsApiKey, wakeWordEnabled, updateWakeWordEnabled } = useWellness();
   const [clonedVoicePath, setClonedVoicePath] = useState<string>("");
   const [activeTab, setActiveTab] = useState<"profile" | "data" | "theme" | "voice">("profile");
@@ -79,6 +79,7 @@ export default function SettingsScreen() {
   const [recordingTime, setRecordingTime] = useState<number>(0);
   const [recordingTimer, setRecordingTimer] = useState<number | null>(null);
   const [playingAudio, setPlayingAudio] = useState<HTMLAudioElement | null>(null);
+  const wakeRecognitionRef = useRef<any>(null);
   const [playingSampleIndex, setPlayingSampleIndex] = useState<number | null>(null);
   const [elevenLabsApiKeyLocal, setElevenLabsApiKeyLocal] = useState<string>('');
   const [tempApiKey, setTempApiKey] = useState<string>('');
@@ -158,6 +159,92 @@ export default function SettingsScreen() {
       }
     };
   }, [audioStream, recordingTimer, playingAudio]);
+
+  useEffect(() => {
+    const isWeb = Platform.select({ web: true, default: false }) as boolean;
+    if (!isWeb) return;
+
+    try {
+      if (wakeWordEnabled && (('webkitSpeechRecognition' in window) || ('SpeechRecognition' in window))) {
+        const SpeechRecognition: any = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
+        const recognition = new SpeechRecognition();
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        recognition.lang = 'en-US';
+
+        recognition.onstart = () => {
+          console.log('[Settings] Wake word listener started');
+        };
+
+        recognition.onresult = (event: any) => {
+          try {
+            const result = event.results[event.results.length - 1];
+            const transcript: string = result && result[0] && typeof result[0].transcript === 'string' ? result[0].transcript.toLowerCase() : '';
+            if (!transcript) return;
+            if (transcript.includes('hey anuna') || transcript.includes('hey annuna') || transcript.includes('hey anunna') || transcript.includes('anuna')) {
+              console.log('Hey Anuna detected');
+              try {
+                const evt = new CustomEvent('phoenix:wake-word', { detail: { phrase: 'hey anuna', source: 'settings' } });
+                window.dispatchEvent(evt);
+              } catch (e) {
+                console.log('[Settings] Dispatch wake-word event failed', e);
+              }
+              try {
+                const el = document.querySelector('textarea[placeholder="Ask your Phoenix Coach..."]') as HTMLTextAreaElement | null;
+                if (el) {
+                  el.focus();
+                }
+              } catch (e) {
+                console.log('[Settings] Focus coach input failed', e);
+              }
+            }
+          } catch (e) {
+            console.log('[Settings] onresult parse error', e);
+          }
+        };
+
+        recognition.onerror = (event: any) => {
+          console.log('[Settings] Wake word recognition error', event?.error);
+          if (event?.error === 'not-allowed' || event?.error === 'service-not-allowed') {
+            Alert.alert('Microphone Permission Needed', 'Please allow microphone access in your browser to use Hey Anuna.');
+          }
+        };
+
+        recognition.onend = () => {
+          if (wakeWordEnabled) {
+            try {
+              recognition.start();
+            } catch (e) {
+              console.log('[Settings] Auto-restart failed', e);
+            }
+          }
+        };
+
+        wakeRecognitionRef.current = recognition;
+        try {
+          recognition.start();
+        } catch (e) {
+          console.log('[Settings] recognition.start() failed', e);
+        }
+      } else {
+        if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+          console.log('[Settings] Web Speech API not available');
+        }
+      }
+    } catch (e) {
+      console.log('[Settings] Wake word setup error', e);
+    }
+
+    return () => {
+      try {
+        if (wakeRecognitionRef.current) {
+          wakeRecognitionRef.current.stop();
+          wakeRecognitionRef.current = null;
+          console.log('[Settings] Wake word listener stopped');
+        }
+      } catch {}
+    };
+  }, [wakeWordEnabled]);
 
   const loadVoicePreference = async () => {
     try {
@@ -1970,6 +2057,39 @@ export default function SettingsScreen() {
     </LinearGradient>
   );
 }
+
+class SettingsErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean }> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  componentDidCatch(error: unknown, info: unknown) {
+    console.log('[Settings] ErrorBoundary caught', { error, info });
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <Text style={{ color: 'white', fontSize: 16, textAlign: 'center' }}>Something went wrong in Settings.</Text>
+        </View>
+      );
+    }
+    return this.props.children as any;
+  }
+}
+
+function SettingsScreenWrapped() {
+  return (
+    <SettingsErrorBoundary>
+      <SettingsScreen />
+    </SettingsErrorBoundary>
+  );
+}
+
+export default React.memo(SettingsScreenWrapped);
 
 const styles = StyleSheet.create({
   container: {

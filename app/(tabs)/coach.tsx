@@ -83,6 +83,7 @@ function PhoenixCoach() {
   const soundWaves = [0, 0, 0, 0, 0];
   const scrollViewRef = useRef<ScrollView>(null);
   const typingAnimation = useRef(new Animated.Value(0)).current;
+  const wakeWordHandlerRef = useRef<((e: any) => void) | null>(null);
   const recognitionRef = useRef<any>(null);
   const currentUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const wakeWordRecognitionRef = useRef<any>(null);
@@ -1039,6 +1040,28 @@ function PhoenixCoach() {
     }, 100);
   }, [chatMessages, isTyping]);
   
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      const handler = (e: any) => {
+        console.log('Hey Anuna detected');
+        try {
+          inputRef.current?.focus();
+        } catch (err) {
+          console.log('[Coach] focus on wake-word failed', err);
+        }
+      };
+      wakeWordHandlerRef.current = handler;
+      window.addEventListener('phoenix:wake-word', handler as any);
+      return () => {
+        if (wakeWordHandlerRef.current) {
+          window.removeEventListener('phoenix:wake-word', wakeWordHandlerRef.current as any);
+          wakeWordHandlerRef.current = null;
+        }
+      };
+    }
+    return undefined;
+  }, []);
+
   // Cleanup effect for voice recognition
   useEffect(() => {
     return () => {
