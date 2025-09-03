@@ -569,10 +569,7 @@ function PhoenixCoach() {
       }
 
       const clonedPath = await AsyncStorage.getItem('@phoenix_cloned_voice_path');
-      const storedVoiceId = await AsyncStorage.getItem('@phoenix_elevenlabs_voice_id');
-      const voiceId = (storedVoiceId ?? 'your_voice_id_here').trim();
-
-      const endpoint = `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`;
+      const endpoint = `https://api.elevenlabs.io/v1/text-to-speech/ahvd0TWxmVC87GTyJn2P`;
 
       const body = {
         text,
@@ -582,6 +579,7 @@ function PhoenixCoach() {
         },
       } as const;
 
+      console.log('[Coach] ElevenLabs request init');
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: {
@@ -591,6 +589,7 @@ function PhoenixCoach() {
         },
         body: JSON.stringify(body),
       });
+      console.log('[Coach] ElevenLabs response', res.status);
 
       if (!res.ok) {
         console.warn('[Coach] ElevenLabs TTS failed', res.status);
@@ -609,7 +608,7 @@ function PhoenixCoach() {
         const blob = new Blob([arrayBuffer], { type: 'audio/mpeg' });
         const url = URL.createObjectURL(blob);
         const audio = new (window as any).Audio(url);
-        audio.play();
+        audio.play().catch((e: unknown) => console.log('[Coach] web audio play error', e));
         return;
       }
 
@@ -697,7 +696,7 @@ function PhoenixCoach() {
         const blob = new Blob([arrayBuffer], { type: 'audio/mpeg' });
         const url = URL.createObjectURL(blob);
         const audio = new (window as any).Audio(url);
-        audio.play();
+        audio.play().catch((e: unknown) => console.log('[Coach] web audio play error', e));
         return;
       }
 
