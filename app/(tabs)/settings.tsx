@@ -695,6 +695,12 @@ function SettingsScreen() {
         const blob = await response.blob();
         const url = URL.createObjectURL(blob);
         const audio = new (window as any).Audio(url);
+        try {
+          audio.playbackRate = ttsSpeed ?? 0.8;
+          console.log('[Settings] Web audio playbackRate set to', audio.playbackRate);
+        } catch (e) {
+          console.log('[Settings] Failed to set web playbackRate', e);
+        }
         audio.onended = () => {
           URL.revokeObjectURL(url);
           console.log('[Settings] Web audio ended');
@@ -714,6 +720,19 @@ function SettingsScreen() {
       console.log('[Settings] Saved audio to', fileUri);
 
       const { sound } = await ExpoAudio.Sound.createAsync({ uri: fileUri }, { shouldPlay: true });
+      try {
+        // @ts-ignore some platforms require setStatusAsync
+        await sound.setStatusAsync({ rate: ttsSpeed ?? 0.8, shouldCorrectPitch: true });
+        console.log('[Settings] Mobile audio rate set to', ttsSpeed ?? 0.8);
+      } catch (e) {
+        try {
+          // @ts-ignore older API
+          await sound.setRateAsync(ttsSpeed ?? 0.8, true);
+          console.log('[Settings] Mobile audio setRateAsync applied', ttsSpeed ?? 0.8);
+        } catch (err) {
+          console.log('[Settings] Failed to set mobile playback rate', err);
+        }
+      }
       sound.setOnPlaybackStatusUpdate((status) => {
         const s = status as any;
         if (s?.didJustFinish) {
@@ -1766,6 +1785,23 @@ function SettingsScreen() {
             <View style={[styles.sliderTrack, { backgroundColor: currentTheme.colors.primary + '22' }]}>
               <View style={[styles.sliderFill, { backgroundColor: currentTheme.colors.primary, width: `${((ttsSpeed - 0.5) / 1.0) * 100}%` }]} />
             </View>
+            {/* @ts-ignore web-only slider */}
+            {Platform.OS === 'web' && (
+              // @ts-ignore web-only
+              <input
+                type="range"
+                min={0.5}
+                max={1.5}
+                step={0.1}
+                value={ttsSpeed}
+                onChange={(e: any) => {
+                  const val = Math.max(0.5, Math.min(1.5, parseFloat(e?.target?.value ?? '0.8')));
+                  updateTtsSpeed(+val.toFixed(1));
+                  console.log('[Settings] Speed slider changed:', +val.toFixed(1));
+                }}
+                style={{ width: 160 }}
+              />
+            )}
             <TouchableOpacity
               testID="speed-increase"
               style={[styles.speedButton, { backgroundColor: currentTheme.colors.card, borderColor: currentTheme.colors.primary }]}
