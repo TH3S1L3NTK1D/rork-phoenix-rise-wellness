@@ -84,6 +84,7 @@ function SettingsScreen() {
   const wakeRecognitionRef = useRef<any>(null);
   const [playingSampleIndex, setPlayingSampleIndex] = useState<number | null>(null);
   const [elevenLabsApiKeyLocal, setElevenLabsApiKeyLocal] = useState<string>('');
+  const [voicePersonality, setVoicePersonality] = useState<string>('motivator');
   const [tempApiKey, setTempApiKey] = useState<string>('');
 
   const [apiKeyVisible, setApiKeyVisible] = useState<boolean>(false);
@@ -144,6 +145,24 @@ function SettingsScreen() {
         if (stored) setClonedVoicePath(stored);
       } catch (e) {
         console.error('Error loading clonedVoicePath', e);
+      }
+    })();
+
+    (async () => {
+      try {
+        const saved = Platform.OS === 'web' && typeof window !== 'undefined' ? window.localStorage.getItem('phoenixVoiceSettings') : null;
+        if (saved) {
+          const parsed = JSON.parse(saved) as { currentProfile?: string };
+          if (parsed?.currentProfile) setVoicePersonality(parsed.currentProfile);
+        } else {
+          const mobileSaved = await AsyncStorage.getItem('phoenixVoiceSettings');
+          if (mobileSaved) {
+            const parsedMobile = JSON.parse(mobileSaved) as { currentProfile?: string };
+            if (parsedMobile?.currentProfile) setVoicePersonality(parsedMobile.currentProfile);
+          }
+        }
+      } catch (e) {
+        console.log('[Settings] load voice personality error', e);
       }
     })();
   }, []);
@@ -1198,6 +1217,34 @@ function SettingsScreen() {
     </View>
   );
 
+  const savePersonality = async (profileId: string) => {
+    try {
+      setVoicePersonality(profileId);
+      const payload = JSON.stringify({ currentProfile: profileId });
+      await AsyncStorage.setItem('phoenixVoiceSettings', payload);
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        window.localStorage.setItem('phoenixVoiceSettings', payload);
+      }
+      console.log('[Settings] Voice personality saved:', profileId);
+    } catch (e) {
+      console.log('[Settings] savePersonality error', e);
+    }
+  };
+
+  useEffect(() => {
+    (async () => {
+      try {
+        if (voicePersonality === 'motivator' && clonedVoicePath) {
+          await savePersonality('anuna');
+          console.log('[Settings] Defaulted personality to Anuna due to clonedVoicePath');
+        }
+      } catch (e) {
+        console.log('[Settings] default personality set error', e);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clonedVoicePath]);
+
   const VoiceTab = () => (
     <View style={styles.tabContent}>
       <View style={[styles.glassCard, { backgroundColor: currentTheme.colors.card }]}>
@@ -1205,6 +1252,31 @@ function SettingsScreen() {
         <Text style={[styles.voiceDescription, { color: currentTheme.colors.text }]}> 
           Choose how Phoenix Coach speaks to you
         </Text>
+
+        <View style={[styles.voiceSettingRow, { marginBottom: 20 }]}>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.voiceSettingLabel, { color: currentTheme.colors.text }]}>Voice Personality</Text>
+            <Text style={{ color: currentTheme.colors.text, opacity: 0.7, marginTop: 4, fontSize: 12 }}>
+              {voicePersonality === 'anuna' ? 'Custom Anuna voice for personalized coaching' : voicePersonality === 'motivator' ? 'Enthusiastic motivator' : voicePersonality === 'calm' ? 'Soothing and calm' : voicePersonality === 'drill' ? 'Commanding tough-love' : 'Warm supportive friend'}
+            </Text>
+          </View>
+          <Pressable
+            testID="voice-personality-dropdown"
+            style={[styles.toggleSwitch, { width: 140, height: 36, borderColor: currentTheme.colors.primary, backgroundColor: currentTheme.colors.card }]}
+            onPress={() => {
+              const options = ['anuna', 'motivator', 'calm', 'drill', 'friend'];
+              const idx = options.indexOf(voicePersonality);
+              const next = options[(idx + 1) % options.length];
+              void savePersonality(next);
+            }}
+          >
+            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+              <Text style={{ color: currentTheme.colors.text, fontSize: 12 }} numberOfLines={1} ellipsizeMode='tail'>
+                {voicePersonality === 'anuna' ? 'Anuna' : voicePersonality === 'motivator' ? 'Motivator' : voicePersonality === 'calm' ? 'Calm' : voicePersonality === 'drill' ? 'Drill' : 'Friend'}
+              </Text>
+            </View>
+          </Pressable>
+        </View>
         
         <View style={styles.voiceCardsContainer}>
           <TouchableOpacity 
@@ -1666,7 +1738,7 @@ function SettingsScreen() {
         <View style={styles.voiceSettingRow}>
           <Text style={[styles.voiceSettingLabel, { color: currentTheme.colors.text }]}>Current Voice:</Text>
           <Text style={[styles.voiceSettingValue, { color: currentTheme.colors.primary }]}> 
-            Anuna (ElevenLabs)
+            {voicePersonality === 'anuna' ? 'Anuna (ElevenLabs)' : 'Phoenix (Browser TTS)'}
           </Text>
         </View>
         

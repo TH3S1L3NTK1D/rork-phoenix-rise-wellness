@@ -95,6 +95,14 @@ function PhoenixCoach() {
   // Voice Profiles
   const voiceProfiles: VoiceProfile[] = [
     {
+      id: 'anuna',
+      name: 'Anuna',
+      description: 'Custom Anuna voice for personalized coaching',
+      rate: 1.0,
+      pitch: 1.05,
+      volume: 1.0,
+    },
+    {
       id: 'motivator',
       name: 'Phoenix Motivator',
       description: 'Enthusiastic female voice for motivation',
@@ -155,6 +163,34 @@ function PhoenixCoach() {
   // Initialize selected voice
   useEffect(() => {
     setSelectedVoice(loadSelectedVoice());
+  }, []);
+
+  // If a clonedVoicePath exists, default personality to Anuna
+  useEffect(() => {
+    const initAnunaDefault = async () => {
+      try {
+        const key = '@phoenix_cloned_voice_path';
+        if (Platform.OS === 'web') {
+          const webPath = (window as any)?.localStorage?.getItem(key);
+          if (webPath) {
+            const saved = Platform.OS === 'web' ? localStorage.getItem('phoenixVoiceSettings') : null;
+            let next: VoiceSettings;
+            if (saved) {
+              next = { ...(JSON.parse(saved) as VoiceSettings), currentProfile: 'anuna' };
+            } else {
+              next = { ...voiceSettings, currentProfile: 'anuna' };
+            }
+            saveVoiceSettings(next);
+            console.log('[Coach] Defaulted personality to Anuna (web)');
+            return;
+          }
+        }
+      } catch (e) {
+        console.log('[Coach] initAnunaDefault error', e);
+      }
+    };
+    initAnunaDefault();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Save voice settings to localStorage
@@ -579,8 +615,8 @@ function PhoenixCoach() {
       const body = {
         text,
         voice_settings: {
-          stability: 0.5,
-          similarity_boost: 0.75,
+          stability: voiceSettings.currentProfile === 'anuna' ? 0.35 : 0.5,
+          similarity_boost: voiceSettings.currentProfile === 'anuna' ? 0.85 : 0.75,
         },
       } as const;
 
@@ -1526,7 +1562,7 @@ function PhoenixCoach() {
               onPressIn={() => {
                 if (Platform.OS === 'android') {
                   console.log('[Coach] voice dropdown onPressIn');
-                  const voices = ['default', 'custom', 'mentor'];
+                  const voices = ['default', 'custom', 'mentor', 'anuna'];
                   const currentIndex = voices.indexOf(selectedVoice);
                   const nextIndex = (currentIndex + 1) % voices.length;
                   const nextVoice = voices[nextIndex];
@@ -1536,7 +1572,7 @@ function PhoenixCoach() {
               onPress={() => {
                 if (Platform.OS !== 'android') {
                   console.log('[Coach] voice dropdown onPress');
-                  const voices = ['default', 'custom', 'mentor'];
+                  const voices = ['default', 'custom', 'mentor', 'anuna'];
                   const currentIndex = voices.indexOf(selectedVoice);
                   const nextIndex = (currentIndex + 1) % voices.length;
                   const nextVoice = voices[nextIndex];
