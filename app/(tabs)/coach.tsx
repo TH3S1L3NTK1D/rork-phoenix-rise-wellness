@@ -77,6 +77,9 @@ function PhoenixCoach() {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [voiceModeActive, setVoiceModeActive] = useState(false);
   const [isWaitingForWakeWord, setIsWaitingForWakeWord] = useState(false);
+  const [isWakeRecording, setIsWakeRecording] = useState<boolean>(false);
+  const recordingRef = useRef<Audio.Recording | null>(null);
+  const wakeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [currentEmotion, setCurrentEmotion] = useState<'celebration' | 'comfort' | 'motivation' | 'default'>('default');
   const [emotionEmoji, setEmotionEmoji] = useState('🔥');
   const [selectedVoice, setSelectedVoice] = useState('default');
@@ -1013,6 +1016,154 @@ function PhoenixCoach() {
     setIsListening(false);
   };
   
+  const focusCoachInput = useCallback(() => {
+    try {
+      inputRef.current?.focus();
+    } catch (err) {
+      console.log('[Coach] focus input failed', err);
+    }
+  }, []);
+
+  const detectHeyAnunaInText = useCallback((text: string) => {
+    try {
+      const t = (text ?? '').toLowerCase();
+      const matched = t.includes('hey anuna') || t.includes('hey annuna') || t.includes('hey anunna') || t.includes('anuna');
+      console.log('[Coach] Detect Hey Anuna in text:', { matched, text: t.slice(0, 100) });
+      if (matched) {
+        console.log('Hey Anuna detected');
+        focusCoachInput();
+      }
+      return matched;
+    } catch (e) {
+      console.log('[Coach] detectHeyAnunaInText error', e);
+      return false;
+    }
+  }, [focusCoachInput]);
+
+  const stopWakeRecordingTimer = useCallback(() => {
+    if (wakeTimerRef.current) {
+      clearTimeout(wakeTimerRef.current);
+      wakeTimerRef.current = null;
+    }
+  }, []);
+
+  const stopWakeRecording = useCallback(async () => {
+    try {
+      stopWakeRecordingTimer();
+      if (recordingRef.current) {
+        console.log('[Coach] Stopping wake recording');
+        await recordingRef.current.stopAndUnloadAsync();
+      }
+    } catch (e) {
+      console.log('[Coach] stopWakeRecording error', e);
+    } finally {
+      setIsWakeRecording(false);
+    }
+  }, [stopWakeRecordingTimer]);
+
+  const transcribeAndCheckWakeWord = useCallback(async () => {
+    try {
+      if (Platform.OS === 'web') return;
+      const uri = recordingRef.current?.getURI();
+      if (!uri) {
+        console.log('[Coach] No recording URI');
+        return;
+      }
+      const uriParts = uri.split('.');
+      const ext = uriParts[uriParts.length - 1] || 'm4a';
+      const mime = `audio/${ext}`;
+      const name = `wake.${ext}`;
+
+      const formData = new FormData();
+      formData.append('audio', { uri, name, type: mime } as any);
+
+      const res = await fetch('https://toolkit.rork.com/stt/transcribe/', {
+        method: 'POST',
+        body: formData,
+      });
+      if (!res.ok) {
+        console.log('[Coach] STT failed', res.status);
+        return;
+      }
+      const json = await res.json();
+      const text: string = json?.text ?? '';
+      console.log('[Coach] STT result:', text);
+      detectHeyAnunaInText(text);
+    } catch (e) {
+      console.log('[Coach] transcribeAndCheckWakeWord error', e);
+    }
+  }, [detectHeyAnunaInText]);
+
+  const activateHeyAnuna = useCallback(async () => {
+    try {
+      if (!voiceSettings.wakeWordEnabled) {
+        Alert.alert('Wake Word Disabled', 'Enable Hey Anuna in Voice Settings first.');
+        return;
+      }
+
+      const isWeb = Platform.OS === 'web';
+      if (isWeb) {
+        if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+          const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
+          const recognition = new SpeechRecognition();
+          recognition.continuous = false;
+          recognition.interimResults = false;
+          recognition.lang = 'en-US';
+          console.log('[Coach] Web wake-word recognition started (5s)');
+          let stopped = false;
+          const stopAfter = setTimeout(() => {
+            if (!stopped) {
+              try { recognition.stop(); } catch {}
+            }
+          }, 5000);
+          recognition.onresult = (event: any) => {
+            try {
+              const transcript = event?.results?.[0]?.[0]?.transcript ?? '';
+              detectHeyAnunaInText(transcript);
+            } catch (e) {
+              console.log('[Coach] web onresult parse error', e);
+            }
+          };
+          recognition.onend = () => {
+            stopped = true;
+            clearTimeout(stopAfter);
+            console.log('[Coach] Web wake-word recognition ended');
+          };
+          recognition.onerror = (ev: any) => {
+            console.log('[Coach] Web wake-word recognition error', ev?.error);
+          };
+          try { recognition.start(); } catch (e) { console.log('[Coach] recognition.start failed', e); }
+        } else {
+          Alert.alert('Unavailable', 'Web Speech API not available in this browser.');
+        }
+        return;
+      }
+
+      console.log('[Coach] Mobile wake-word 5s recording start');
+      const perm = await Audio.requestPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert('Microphone Permission', 'Please allow microphone access.');
+        return;
+      }
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
+
+      const rec = new Audio.Recording();
+      recordingRef.current = rec;
+      await rec.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY as any);
+      await rec.startAsync();
+      setIsWakeRecording(true);
+      stopWakeRecordingTimer();
+      wakeTimerRef.current = setTimeout(async () => {
+        await stopWakeRecording();
+        await transcribeAndCheckWakeWord();
+        await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+      }, 5000);
+    } catch (e) {
+      console.log('[Coach] activateHeyAnuna error', e);
+      setIsWakeRecording(false);
+    }
+  }, [voiceSettings.wakeWordEnabled, stopWakeRecording, stopWakeRecordingTimer, transcribeAndCheckWakeWord]);
+  
   // Voice Mode Toggle
   const toggleVoiceMode = () => {
     const newVoiceModeActive = !voiceModeActive;
@@ -1271,11 +1422,33 @@ function PhoenixCoach() {
             </View>
             <View>
               <Text testID="coach-header-title" style={[styles.headerTitle, { color: currentTheme.colors.text }]}>Phoenix Coach</Text>
+              {isWakeRecording && (
+                <Text style={[styles.headerSubtitle, { color: currentTheme.colors.text, opacity: 0.7 }]}>Listening 5s…</Text>
+              )}
               <Text style={[styles.headerSubtitle, { color: currentTheme.colors.text, opacity: 0.7 }]}>Your AI Life Coach</Text>
             </View>
           </View>
           
           <View style={styles.headerButtons}>
+            <TouchableOpacity
+              testID="activate-hey-anuna"
+              style={styles.settingsButton}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              onPressIn={() => {
+                if (Platform.OS === 'android') {
+                  console.log('[Coach] Activate Hey Anuna onPressIn');
+                  void activateHeyAnuna();
+                }
+              }}
+              onPress={() => {
+                if (Platform.OS !== 'android') {
+                  console.log('[Coach] Activate Hey Anuna onPress');
+                  void activateHeyAnuna();
+                }
+              }}
+            >
+              <Mic size={20} color={currentTheme.colors.text} />
+            </TouchableOpacity>
             <TouchableOpacity
               testID="coach-header-settings"
               style={styles.settingsButton}
