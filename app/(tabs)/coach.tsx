@@ -66,6 +66,7 @@ function PhoenixCoach() {
     journalEntries,
     currentTheme,
     elevenLabsApiKey,
+    wakeWordEnabled,
   } = useWellness();
 
   const [inputText, setInputText] = useState('');
@@ -838,7 +839,7 @@ function PhoenixCoach() {
   
   // Wake word detection
   const startWakeWordDetection = () => {
-    if (Platform.OS === 'web' && voiceSettings.wakeWordEnabled) {
+    if (Platform.OS === 'web' && (wakeWordEnabled || voiceSettings.wakeWordEnabled)) {
       if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
         const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
         const recognition = new SpeechRecognition();
@@ -853,8 +854,8 @@ function PhoenixCoach() {
         
         recognition.onresult = (event: any) => {
           const transcript = event.results[event.results.length - 1][0].transcript.toLowerCase();
-          
-          if (transcript.includes('hey phoenix') || transcript.includes('phoenix')) {
+          const matched = transcript.includes('hey anuna') || transcript.includes('hey annuna') || transcript.includes('hey anunna') || transcript.includes('anuna');
+          if (matched) {
             setIsWaitingForWakeWord(false);
             recognition.stop();
             // Start main listening after wake word detected
@@ -868,14 +869,14 @@ function PhoenixCoach() {
           setIsWaitingForWakeWord(false);
           // Restart wake word detection after error
           setTimeout(() => {
-            if (voiceSettings.wakeWordEnabled && voiceModeActive) {
+            if ((wakeWordEnabled || voiceSettings.wakeWordEnabled) && voiceModeActive) {
               startWakeWordDetection();
             }
           }, 2000);
         };
         
         recognition.onend = () => {
-          if (voiceSettings.wakeWordEnabled && voiceModeActive) {
+          if ((wakeWordEnabled || voiceSettings.wakeWordEnabled) && voiceModeActive) {
             // Restart wake word detection
             setTimeout(() => {
               startWakeWordDetection();
@@ -938,7 +939,7 @@ function PhoenixCoach() {
           // If in continuous voice mode and not speaking, restart listening
           if (continuous && voiceModeActive && !isSpeaking) {
             setTimeout(() => {
-              if (voiceSettings.wakeWordEnabled) {
+              if (wakeWordEnabled || voiceSettings.wakeWordEnabled) {
                 startWakeWordDetection();
               } else {
                 startListening(true);
@@ -1045,7 +1046,7 @@ function PhoenixCoach() {
 
   const activateHeyAnuna = useCallback(async () => {
     try {
-      if (!voiceSettings.wakeWordEnabled) {
+      if (!(wakeWordEnabled || voiceSettings.wakeWordEnabled)) {
         Alert.alert('Wake Word Disabled', 'Enable Hey Anuna in Voice Settings first.');
         return;
       }
@@ -1111,7 +1112,7 @@ function PhoenixCoach() {
       console.log('[Coach] activateHeyAnuna error', e);
       setIsWakeRecording(false);
     }
-  }, [voiceSettings.wakeWordEnabled, stopWakeRecording, stopWakeRecordingTimer, transcribeAndCheckWakeWord]);
+  }, [wakeWordEnabled, voiceSettings.wakeWordEnabled, stopWakeRecording, stopWakeRecordingTimer, transcribeAndCheckWakeWord]);
   
   // Voice Mode Toggle
   const toggleVoiceMode = () => {
@@ -1120,7 +1121,7 @@ function PhoenixCoach() {
     
     if (newVoiceModeActive) {
       // Start voice mode
-      if (voiceSettings.wakeWordEnabled) {
+      if (wakeWordEnabled || voiceSettings.wakeWordEnabled) {
         startWakeWordDetection();
       } else {
         startListening(true);
@@ -1486,7 +1487,7 @@ function PhoenixCoach() {
           <View style={[styles.voiceModeStatus, { backgroundColor: currentTheme.colors.primary }]}>
             <Radio size={16} color="white" />
             <Text style={styles.voiceModeText}>
-              {isWaitingForWakeWord ? 'Say &quot;Hey Phoenix&quot; to start...' : 
+              {isWaitingForWakeWord ? 'Say "Hey Anuna" to start...' : 
                isSpeaking ? 'Phoenix is speaking...' :
                isListening ? 'Listening...' : 'Voice Mode Active'}
             </Text>
@@ -1943,8 +1944,8 @@ function PhoenixCoach() {
                     onPress={() => saveVoiceSettings({ ...voiceSettings, wakeWordEnabled: !voiceSettings.wakeWordEnabled })}
                   >
                     <View>
-                      <Text style={[styles.toggleLabel, { color: currentTheme.colors.text }]}>Wake Word &quot;Hey Phoenix&quot;</Text>
-                      <Text style={[styles.toggleDescription, { color: currentTheme.colors.text, opacity: 0.6 }]}>Activate listening with &quot;Hey Phoenix&quot;</Text>
+                      <Text style={[styles.toggleLabel, { color: currentTheme.colors.text }]}>Wake Word "Hey Anuna"</Text>
+                      <Text style={[styles.toggleDescription, { color: currentTheme.colors.text, opacity: 0.6 }]}>Activate listening with "Hey Anuna"</Text>
                     </View>
                     <View style={[
                       styles.toggle,

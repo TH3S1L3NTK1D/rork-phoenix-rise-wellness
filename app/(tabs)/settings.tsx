@@ -1673,7 +1673,10 @@ function SettingsScreen() {
         </View>
         
         <View style={styles.voiceSettingRow}>
-          <Text style={[styles.voiceSettingLabel, { color: currentTheme.colors.text }]}>Enable Hey Anuna Wake Word:</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.voiceSettingLabel, { color: currentTheme.colors.text }]}>Enable Hey Anuna Wake Word</Text>
+            <Text style={{ color: currentTheme.colors.text, opacity: 0.7, marginTop: 4, fontSize: 12 }}>Activates the AI Coach with "Hey Anuna"</Text>
+          </View>
           <Pressable
             testID="wake-word-toggle"
             style={[
