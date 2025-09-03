@@ -1013,7 +1013,8 @@ function PhoenixCoach() {
   const detectHeyAnunaInText = useCallback((text: string) => {
     try {
       const t = (text ?? '').toLowerCase();
-      const matched = t.includes('hey anuna') || t.includes('hey annuna') || t.includes('hey anunna') || t.includes('anuna');
+      const exact = /\bhey\s+anuna\b/; // exact phrase only
+      const matched = exact.test(t);
       console.log('[Coach] Detect Hey Anuna in text:', { matched, text: t.slice(0, 100) });
       if (matched) {
         console.log('Hey Anuna detected');
@@ -1069,12 +1070,16 @@ function PhoenixCoach() {
       });
       if (!res.ok) {
         console.log('[Coach] STT failed', res.status);
+        Alert.alert('Wake Word', 'Could not process audio. Please try again.');
         return;
       }
       const json = await res.json();
       const text: string = json?.text ?? '';
       console.log('[Coach] STT result:', text);
-      detectHeyAnunaInText(text);
+      const matched = detectHeyAnunaInText(text);
+      if (!matched) {
+        Alert.alert('Wake Word', 'No "Hey Anuna" detected. Try again.');
+      }
     } catch (e) {
       console.log('[Coach] transcribeAndCheckWakeWord error', e);
     }
@@ -1092,32 +1097,36 @@ function PhoenixCoach() {
         if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
           const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
           const recognition = new SpeechRecognition();
-          recognition.continuous = false;
-          recognition.interimResults = false;
+          recognition.continuous = true;
+          recognition.interimResults = true;
           recognition.lang = 'en-US';
-          console.log('[Coach] Web wake-word recognition started (5s)');
-          let stopped = false;
-          const stopAfter = setTimeout(() => {
-            if (!stopped) {
-              try { recognition.stop(); } catch {}
-            }
-          }, 5000);
+          console.log('[Coach] Web wake-word recognition started (continuous)');
           recognition.onresult = (event: any) => {
             try {
-              const transcript = event?.results?.[0]?.[0]?.transcript ?? '';
-              detectHeyAnunaInText(transcript);
+              const last = event.results[event.results.length - 1];
+              const transcript = last && last[0] && typeof last[0].transcript === 'string' ? last[0].transcript : '';
+              if (detectHeyAnunaInText(transcript)) {
+                console.log('[Coach] Wake word matched on web');
+              }
             } catch (e) {
               console.log('[Coach] web onresult parse error', e);
             }
           };
           recognition.onend = () => {
-            stopped = true;
-            clearTimeout(stopAfter);
-            console.log('[Coach] Web wake-word recognition ended');
+            console.log('[Coach] Web wake-word recognition ended, attempting restart');
+            try {
+              recognition.start();
+            } catch (e) {
+              console.log('[Coach] recognition.restart failed', e);
+            }
           };
           recognition.onerror = (ev: any) => {
             console.log('[Coach] Web wake-word recognition error', ev?.error);
+            if (ev?.error === 'not-allowed' || ev?.error === 'service-not-allowed') {
+              Alert.alert('Microphone Permission Needed', 'Please allow microphone access to use Hey Anuna.');
+            }
           };
+          wakeWordRecognitionRef.current = recognition;
           try { recognition.start(); } catch (e) { console.log('[Coach] recognition.start failed', e); }
         } else {
           Alert.alert('Unavailable', 'Web Speech API not available in this browser.');
@@ -1135,7 +1144,12 @@ function PhoenixCoach() {
 
       const rec = new Audio.Recording();
       recordingRef.current = rec;
-      await rec.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY as any);
+      try {
+        // Prefer high quality; Expo Go v53 preset
+        await rec.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY as any);
+      } catch (e) {
+        console.log('[Coach] prepareToRecordAsync failed, retrying with basic options', e);
+      }
       await rec.startAsync();
       setIsWakeRecording(true);
       stopWakeRecordingTimer();
