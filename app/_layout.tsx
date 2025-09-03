@@ -467,6 +467,28 @@ export default function RootLayout() {
     };
   }, [initializePWA, clearWebCaches]);
 
+  // Disable expo-updates checks in dev; only run in production to avoid preview errors
+  React.useEffect(() => {
+    try {
+      if (process.env.NODE_ENV === 'production' && Platform.OS !== 'web') {
+        (async () => {
+          try {
+            const Updates: any = await (eval('import')('expo-updates') as Promise<any>);
+            console.log('[Updates] Checking for updates (production only)');
+            const result = await Updates.checkForUpdateAsync();
+            console.log('[Updates] isAvailable =', result?.isAvailable ?? false);
+          } catch (e) {
+            console.log('[Updates] Update check skipped/failed:', e);
+          }
+        })();
+      } else {
+        console.log('[Updates] Skipping update checks in dev mode/previews');
+      }
+    } catch (e) {
+      console.log('[Updates] Guarded check error:', e);
+    }
+  }, []);
+
   return (
     <ErrorBoundary>
       <trpc.Provider client={trpcClient} queryClient={queryClient}>
