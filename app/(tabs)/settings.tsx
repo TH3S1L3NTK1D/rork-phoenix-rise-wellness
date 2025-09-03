@@ -679,7 +679,7 @@ function SettingsScreen() {
 
   const testClonedVoice = async () => {
     try {
-      const key = (elevenLabsApiKeyLocal || elevenLabsApiKey || '').trim();
+      const key = (elevenLabsApiKey || '').trim();
       if (!key) {
         Alert.alert('Missing API Key', 'Please enter and save your ElevenLabs API key first.');
         return;
