@@ -180,7 +180,6 @@ const CustomTabBar = memo(function CustomTabBar({ state }: any) {
     () => [
       { label: "Journal", route: "journal" as TabRouteKey },
       { label: "Coach", route: "coach" as TabRouteKey },
-      { label: "Vision Board", route: "vision" as TabRouteKey },
       { label: "Routines", route: "routines" as TabRouteKey },
       { label: "Meditation", route: "meditation" as TabRouteKey },
       { label: "Settings", route: "settings" as TabRouteKey },
@@ -337,13 +336,13 @@ const CustomTabBar = memo(function CustomTabBar({ state }: any) {
 
         <TabBarItem
           testID="tab-more"
-          active={["journal", "coach", "vision", "routines", "meditation", "settings"].includes(currentRoute)}
+          active={["journal", "coach", "routines", "meditation", "settings"].includes(currentRoute)}
           label="More"
           icon={
             <View ref={triggerRefs.more} collapsable={false} onLayout={() => measureTrigger('more')}>
               <MoreHorizontal
                 size={28}
-                color={["journal", "coach", "vision", "routines", "meditation", "settings"].includes(currentRoute) ? "#FF4500" : "#8aa"}
+                color={["journal", "coach", "routines", "meditation", "settings"].includes(currentRoute) ? "#FF4500" : "#8aa"}
               />
             </View>
           }
@@ -531,7 +530,7 @@ export default function TabLayout() {
       <Tabs.Screen name="routines" />
       <Tabs.Screen name="insights" />
       <Tabs.Screen name="analytics" />
-      <Tabs.Screen name="vision" />
+
       <Tabs.Screen name="meditation" />
       <Tabs.Screen name="settings" />
       <Tabs.Screen name="test-android" />

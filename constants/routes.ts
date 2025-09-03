@@ -9,7 +9,7 @@ export const TABS_ROUTES = {
   routines: "/(tabs)/routines",
   insights: "/(tabs)/insights",
   analytics: "/(tabs)/analytics",
-  vision: "/(tabs)/vision",
+
   meditation: "/(tabs)/meditation",
   settings: "/(tabs)/settings",
   "test-android": "/(tabs)/test-android",
