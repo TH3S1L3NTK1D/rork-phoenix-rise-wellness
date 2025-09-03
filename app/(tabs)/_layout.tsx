@@ -414,6 +414,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     alignItems: "center",
     justifyContent: "space-around",
+    zIndex: 1000,
+    elevation: 40,
   },
   tabItem: {
     alignItems: "center",
