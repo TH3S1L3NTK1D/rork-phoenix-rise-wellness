@@ -66,6 +66,7 @@ export default function PhoenixCoach() {
     todaysSupplements,
     journalEntries,
     currentTheme,
+    elevenLabsApiKey,
   } = useWellness();
 
   const [inputText, setInputText] = useState('');
@@ -542,27 +543,85 @@ export default function PhoenixCoach() {
     }
   };
 
+  const arrayBufferToBase64 = (buffer: ArrayBuffer): string => {
+    try {
+      let binary = '';
+      const bytes = new Uint8Array(buffer);
+      const len = bytes.length;
+      for (let i = 0; i < len; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      return typeof btoa !== 'undefined' ? btoa(binary) : '';
+    } catch (e) {
+      console.log('[Coach] arrayBufferToBase64 error', e);
+      return '';
+    }
+  };
+
   // API call function for voice synthesis
   const speakWithAPI = async (text: string) => {
     try {
-      // Check if we have API key and voice ID
-      const apiKey = Platform.OS === 'web' ? localStorage.getItem('elevenlabs_api_key') : null;
-      const voiceId = Platform.OS === 'web' ? localStorage.getItem('phoenix_voice_id') : null;
-      
-      if (!apiKey || !voiceId) {
-        // No API setup, use browser voice
+      const key = (elevenLabsApiKey ?? '').trim();
+
+      if (!key) {
         speakWithBrowser(text);
         return;
       }
-      
-      // Try API call - simplified version
-      console.log('Would call ElevenLabs API here');
-      
-      // For now, just use browser voice
-      speakWithBrowser(text);
-      
+
+      const clonedPath = await AsyncStorage.getItem('@phoenix_cloned_voice_path');
+      const clonedVoiceId = await AsyncStorage.getItem('@phoenix_cloned_voice_id');
+
+      const body = {
+        text,
+        voice_id: clonedVoiceId || 'default_voice_id',
+      } as const;
+
+      const voiceId = clonedVoiceId || 'default_voice_id';
+      const endpoint = `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`;
+
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'xi-api-key': key,
+          'Content-Type': 'application/json',
+          'Accept': 'audio/mpeg',
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) {
+        console.warn('[Coach] ElevenLabs TTS failed', res.status);
+        // fallback to XTTS if clonedPath exists
+        if (clonedPath) {
+          await playTTSWithClonedVoice(text, clonedPath);
+          return;
+        }
+        speakWithBrowser(text);
+        return;
+      }
+
+      const arrayBuffer = await res.arrayBuffer();
+
+      if (Platform.OS === 'web') {
+        const blob = new Blob([arrayBuffer], { type: 'audio/mpeg' });
+        const url = URL.createObjectURL(blob);
+        const audio = new (window as any).Audio(url);
+        audio.play();
+        return;
+      }
+
+      const base64 = arrayBufferToBase64(arrayBuffer);
+      const { sound } = await Audio.Sound.createAsync({ uri: `data:audio/mpeg;base64,${base64}` });
+      await sound.playAsync();
     } catch (error) {
-      console.log('API failed, using browser voice');
+      console.log('[Coach] speakWithAPI error, using browser or fallback', error);
+      try {
+        const clonedPath = await AsyncStorage.getItem('@phoenix_cloned_voice_path');
+        if (clonedPath) {
+          await playTTSWithClonedVoice(text, clonedPath);
+          return;
+        }
+      } catch {}
       speakWithBrowser(text);
     }
   };
@@ -596,14 +655,22 @@ export default function PhoenixCoach() {
   const speakCoachMessage = async (text: string) => {
     try {
       const clonedPath = await AsyncStorage.getItem('@phoenix_cloned_voice_path');
-      if (!clonedPath) {
-        speakWithAPI(text);
+      const key = (elevenLabsApiKey ?? '').trim();
+
+      if (key) {
+        await speakWithAPI(text);
         return;
       }
-      await playTTSWithClonedVoice(text, clonedPath);
+
+      if (clonedPath) {
+        await playTTSWithClonedVoice(text, clonedPath);
+        return;
+      }
+
+      speakWithBrowser(text);
     } catch (e) {
-      console.log('speakCoachMessage fallback to browser', e);
-      speakWithAPI(text);
+      console.log('speakCoachMessage fallback', e);
+      speakWithBrowser(text);
     }
   };
 
@@ -631,7 +698,8 @@ export default function PhoenixCoach() {
         return;
       }
 
-      const { sound } = await Audio.Sound.createAsync({ uri: `data:audio/mpeg;base64,${Buffer.from(arrayBuffer).toString('base64')}` });
+      const base64 = arrayBufferToBase64(arrayBuffer);
+      const { sound } = await Audio.Sound.createAsync({ uri: `data:audio/mpeg;base64,${base64}` });
       await sound.playAsync();
     } catch (e) {
       console.error('playTTSWithClonedVoice error', e);

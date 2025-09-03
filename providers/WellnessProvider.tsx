@@ -234,6 +234,7 @@ interface WellnessData {
   visualizationStreak: number;
   lastVisualizationDate?: Date;
   meditation: MeditationData;
+  elevenLabsApiKey?: string;
 }
 
 function isObject(val: unknown): val is Record<string, unknown> {
@@ -407,6 +408,7 @@ function isWellnessData(val: unknown): val is WellnessData {
 
 const STORAGE_KEY = "@phoenix_wellness_data";
 const VOICE_PATH_KEY = "@phoenix_cloned_voice_path";
+const ELEVEN_KEY = "@phoenix_elevenlabs_api_key";
 
 export const PRESET_THEMES: Theme[] = [
   {
@@ -492,11 +494,29 @@ export const [WellnessProvider, useWellness] = createContextHook(() => {
   });
 
   const [isLoading, setIsLoading] = useState(true);
+  const [elevenLabsApiKey, setElevenKeyState] = useState<string>("");
 
   const loadData = async () => {
     try {
       const stored = await AsyncStorage.getItem(STORAGE_KEY);
       console.log('[WellnessProvider] loadData() fetched bytes:', stored ? stored.length : 0);
+
+      // Load ElevenLabs API key with web fallback
+      try {
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+          const webKey = window.localStorage.getItem(ELEVEN_KEY);
+          if (webKey) {
+            setElevenKeyState(webKey);
+          }
+        }
+        const key = await AsyncStorage.getItem(ELEVEN_KEY);
+        if (key && key.trim().length > 0) {
+          setElevenKeyState(key);
+        }
+      } catch (e) {
+        console.warn('[WellnessProvider] Failed to load ElevenLabs key', e);
+      }
+
       if (stored) {
         let parsed: unknown = null;
         try {
@@ -520,6 +540,7 @@ export const [WellnessProvider, useWellness] = createContextHook(() => {
         setData({
           ...base,
           lastUpdated: new Date(base.lastUpdated as any),
+          elevenLabsApiKey: (base as any).elevenLabsApiKey ?? undefined,
           meals: (base.meals as any[])?.map((m: any) => ({ ...m, date: new Date(m.date) })) || [],
           extendedMeals: (base.extendedMeals as any[])?.map((m: any) => ({ ...m, date: new Date(m.date) })) || [],
           addictions: (base.addictions as any[])?.map((a: any) => ({
@@ -668,6 +689,25 @@ export const [WellnessProvider, useWellness] = createContextHook(() => {
       }
     };
   }, [data, isLoading, scheduleSave]);
+
+  // Keep ElevenLabs key persisted separately too
+  useEffect(() => {
+    (async () => {
+      try {
+        await AsyncStorage.setItem(ELEVEN_KEY, elevenLabsApiKey ?? "");
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+          if (elevenLabsApiKey && elevenLabsApiKey.trim().length > 0) {
+            window.localStorage.setItem(ELEVEN_KEY, elevenLabsApiKey);
+          } else {
+            window.localStorage.removeItem(ELEVEN_KEY);
+          }
+        }
+        console.log('[WellnessProvider] ElevenLabs key persisted length:', (elevenLabsApiKey ?? '').length);
+      } catch (e) {
+        console.warn('[WellnessProvider] Persist key failed', e);
+      }
+    })();
+  }, [elevenLabsApiKey]);
 
   // Reset supplements daily
   useEffect(() => {
@@ -1289,6 +1329,17 @@ export const [WellnessProvider, useWellness] = createContextHook(() => {
     }
   }, [data.supplements]);
 
+  const updateElevenLabsApiKey = useCallback((key: string) => {
+    try {
+      const sanitized = (key ?? '').trim();
+      setElevenKeyState(sanitized);
+      setData((prev) => ({ ...prev, elevenLabsApiKey: sanitized }));
+      console.log('[WellnessProvider] updateElevenLabsApiKey set length:', sanitized.length);
+    } catch (e) {
+      console.error('[WellnessProvider] updateElevenLabsApiKey error', e);
+    }
+  }, []);
+
   return useMemo(() => ({
     // Data
     phoenixPoints,
@@ -1312,6 +1363,10 @@ export const [WellnessProvider, useWellness] = createContextHook(() => {
     visualizationSessions: data.visualizationSessions,
     dreamLifeScript: data.dreamLifeScript,
     visualizationStreak: data.visualizationStreak,
+    elevenLabsApiKey: data.elevenLabsApiKey ?? elevenLabsApiKey,
+    
+    // Updaters
+    updateElevenLabsApiKey,
     
     // Meal functions
     addMeal,
@@ -1434,6 +1489,9 @@ export const [WellnessProvider, useWellness] = createContextHook(() => {
     data.visualizationSessions,
     data.dreamLifeScript,
     data.visualizationStreak,
+    data.elevenLabsApiKey,
+    elevenLabsApiKey,
+    updateElevenLabsApiKey,
     addVisionBoard,
     updateVisionBoard,
     deleteVisionBoard,

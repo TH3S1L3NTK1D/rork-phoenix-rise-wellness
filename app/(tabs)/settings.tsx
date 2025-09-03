@@ -9,6 +9,7 @@ import {
   Alert,
   Platform,
   Modal,
+  Pressable,
 } from "react-native";
 
 import { LinearGradient } from "expo-linear-gradient";
@@ -28,7 +29,7 @@ interface UserProfile {
 const PROFILE_STORAGE_KEY = "@phoenix_user_profile";
 
 export default function SettingsScreen() {
-  const { phoenixPoints, meals, extendedMeals, goals, journalEntries, supplements, addictions, currentTheme, updateTheme, resetToPhoenixTheme } = useWellness();
+  const { phoenixPoints, meals, extendedMeals, goals, journalEntries, supplements, addictions, currentTheme, updateTheme, resetToPhoenixTheme, elevenLabsApiKey, updateElevenLabsApiKey } = useWellness();
   const [clonedVoicePath, setClonedVoicePath] = useState<string>("");
   const [activeTab, setActiveTab] = useState<"profile" | "data" | "theme" | "voice">("profile");
   const [profile, setProfile] = useState<UserProfile>({
@@ -79,7 +80,7 @@ export default function SettingsScreen() {
   const [recordingTimer, setRecordingTimer] = useState<number | null>(null);
   const [playingAudio, setPlayingAudio] = useState<HTMLAudioElement | null>(null);
   const [playingSampleIndex, setPlayingSampleIndex] = useState<number | null>(null);
-  const [elevenLabsApiKey, setElevenLabsApiKey] = useState<string>('');
+  const [elevenLabsApiKeyLocal, setElevenLabsApiKeyLocal] = useState<string>('');
   const [tempApiKey, setTempApiKey] = useState<string>('');
 
   const [apiKeyVisible, setApiKeyVisible] = useState<boolean>(false);
@@ -118,8 +119,8 @@ export default function SettingsScreen() {
   }, [profile]);
 
   useEffect(() => {
-    setTempApiKey(elevenLabsApiKey);
-  }, [elevenLabsApiKey]);
+    setTempApiKey(elevenLabsApiKeyLocal || elevenLabsApiKey || '');
+  }, [elevenLabsApiKeyLocal, elevenLabsApiKey]);
 
   useEffect(() => {
     setTempColors(customColors);
@@ -132,8 +133,8 @@ export default function SettingsScreen() {
   useEffect(() => {
     loadVoicePreference();
     loadRecordedSamples();
-    loadApiKey();
     loadClonedVoiceId();
+    setElevenLabsApiKeyLocal(elevenLabsApiKey || '');
     (async () => {
       try {
         const stored = await AsyncStorage.getItem('@phoenix_cloned_voice_path');
@@ -182,11 +183,7 @@ export default function SettingsScreen() {
 
   const loadApiKey = async () => {
     try {
-      const stored = await AsyncStorage.getItem('@phoenix_elevenlabs_api_key');
-      if (stored) {
-        const decoded = atob(stored);
-        setElevenLabsApiKey(decoded);
-      }
+      setElevenLabsApiKeyLocal(elevenLabsApiKey || '');
     } catch (error) {
       console.error('Error loading API key:', error);
     }
@@ -257,17 +254,18 @@ export default function SettingsScreen() {
 
   const saveApiKey = async () => {
     try {
-      const key = readInputValue(apiKeyInputId) || tempApiKey;
-      if (key.trim() === '') {
-        await AsyncStorage.removeItem('@phoenix_elevenlabs_api_key');
-        setElevenLabsApiKey('');
+      const key = (readInputValue(apiKeyInputId) || tempApiKey || '').trim();
+      if (key.length === 0) {
+        updateElevenLabsApiKey('');
+        setElevenLabsApiKeyLocal('');
         Alert.alert('Success', 'API key removed');
+        console.log('[Settings] ElevenLabs key removed');
         return;
       }
-      const encoded = btoa(key);
-      await AsyncStorage.setItem('@phoenix_elevenlabs_api_key', encoded);
-      setElevenLabsApiKey(key);
-      Alert.alert('Success', 'API key saved securely!');
+      updateElevenLabsApiKey(key);
+      setElevenLabsApiKeyLocal(key);
+      Alert.alert('Success', 'API key saved!');
+      console.log('[Settings] ElevenLabs key saved len:', key.length);
     } catch (error) {
       console.error('Error saving API key:', error);
       Alert.alert('Error', 'Failed to save API key');
@@ -276,7 +274,7 @@ export default function SettingsScreen() {
 
   const testApiConnection = async () => {
     const liveKey = readInputValue(apiKeyInputId);
-    const keyToTest = (liveKey || tempApiKey || elevenLabsApiKey).trim();
+    const keyToTest = (liveKey || tempApiKey || elevenLabsApiKeyLocal || elevenLabsApiKey || '').trim();
     if (!keyToTest) {
       Alert.alert('Error', 'Please enter your ElevenLabs API key first');
       return;
@@ -1440,27 +1438,29 @@ export default function SettingsScreen() {
           </View>
           
           <View style={styles.apiButtonsContainer}>
-            <TouchableOpacity 
-              style={[styles.apiButton, { backgroundColor: currentTheme.colors.primary + '20' }]}
+            <Pressable 
+              style={({ pressed }) => [styles.apiButton, { backgroundColor: pressed ? currentTheme.colors.primary + '35' : currentTheme.colors.primary + '20' }]}
               onPress={saveApiKey}
-              activeOpacity={0.8}
+              android_ripple={{ color: '#ffffff20' }}
+              testID="save-elevenlabs-key"
             >
               <Text style={[styles.apiButtonText, { color: currentTheme.colors.primary }]}>💾 Save Key</Text>
-            </TouchableOpacity>
+            </Pressable>
             
-            <TouchableOpacity 
-              style={[
+            <Pressable 
+              style={({ pressed }) => [
                 styles.apiButton, 
                 { 
                   backgroundColor: apiConnectionStatus === 'testing' ? '#666' : 
                                  apiConnectionStatus === 'success' ? '#4CAF50' + '20' : 
                                  apiConnectionStatus === 'error' ? '#DC2626' + '20' : 
-                                 currentTheme.colors.primary + '20'
+                                 (pressed ? currentTheme.colors.primary + '35' : currentTheme.colors.primary + '20')
                 }
               ]}
               onPress={testApiConnection}
               disabled={apiConnectionStatus === 'testing'}
-              activeOpacity={0.8}
+              android_ripple={{ color: '#ffffff20' }}
+              testID="test-elevenlabs-connection"
             >
               <Text style={[
                 styles.apiButtonText, 
@@ -1476,7 +1476,7 @@ export default function SettingsScreen() {
                  apiConnectionStatus === 'error' ? '❌ Failed' : 
                  '🔗 Test Connection'}
               </Text>
-            </TouchableOpacity>
+            </Pressable>
           </View>
         </View>
         
@@ -1520,8 +1520,8 @@ export default function SettingsScreen() {
         
         <View style={styles.voiceSettingRow}>
           <Text style={[styles.voiceSettingLabel, { color: currentTheme.colors.text }]}>API Status:</Text>
-          <Text style={[styles.voiceSettingValue, { color: elevenLabsApiKey ? '#4CAF50' : '#666' }]}> 
-            {elevenLabsApiKey ? 'API Key Configured' : 'No API Key'}
+          <Text style={[styles.voiceSettingValue, { color: (elevenLabsApiKeyLocal || elevenLabsApiKey) ? '#4CAF50' : '#666' }]}> 
+            {(elevenLabsApiKeyLocal || elevenLabsApiKey) ? 'API Key Configured' : 'No API Key'}
           </Text>
         </View>
         
