@@ -29,7 +29,7 @@ interface UserProfile {
 const PROFILE_STORAGE_KEY = "@phoenix_user_profile";
 
 export default function SettingsScreen() {
-  const { phoenixPoints, meals, extendedMeals, goals, journalEntries, supplements, addictions, currentTheme, updateTheme, resetToPhoenixTheme, elevenLabsApiKey, updateElevenLabsApiKey } = useWellness();
+  const { phoenixPoints, meals, extendedMeals, goals, journalEntries, supplements, addictions, currentTheme, updateTheme, resetToPhoenixTheme, elevenLabsApiKey, updateElevenLabsApiKey, wakeWordEnabled, updateWakeWordEnabled } = useWellness();
   const [clonedVoicePath, setClonedVoicePath] = useState<string>("");
   const [activeTab, setActiveTab] = useState<"profile" | "data" | "theme" | "voice">("profile");
   const [profile, setProfile] = useState<UserProfile>({
@@ -1537,6 +1537,36 @@ export default function SettingsScreen() {
           </Text>
         </View>
         
+        <View style={styles.voiceSettingRow}>
+          <Text style={[styles.voiceSettingLabel, { color: currentTheme.colors.text }]}>Enable Hey Anuna Wake Word:</Text>
+          <Pressable
+            testID="wake-word-toggle"
+            style={[
+              styles.toggleSwitch,
+              {
+                backgroundColor: wakeWordEnabled ? currentTheme.colors.primary : 'rgba(255, 255, 255, 0.2)',
+                borderColor: wakeWordEnabled ? currentTheme.colors.primary : 'rgba(255, 255, 255, 0.3)'
+              }
+            ]}
+            onPress={() => {
+              const newValue = !wakeWordEnabled;
+              updateWakeWordEnabled(newValue);
+              console.log('[Settings] Wake word enabled toggled to:', newValue);
+            }}
+            android_ripple={{ color: '#ffffff20' }}
+          >
+            <View
+              style={[
+                styles.toggleThumb,
+                {
+                  backgroundColor: '#FFFFFF',
+                  transform: [{ translateX: wakeWordEnabled ? 20 : 2 }]
+                }
+              ]}
+            />
+          </Pressable>
+        </View>
+        
         <TouchableOpacity 
           testID="settings-voice-test"
           style={[styles.testVoiceButton, { backgroundColor: currentTheme.colors.primary + '20' }]}
@@ -2689,6 +2719,20 @@ const styles = StyleSheet.create({
   testVoiceButtonText: {
     fontSize: 16,
     fontWeight: '600',
+  },
+  toggleSwitch: {
+    width: 50,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 2,
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  toggleThumb: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    position: 'absolute',
   },
   colorButtonsContainer: {
     flexDirection: 'row',

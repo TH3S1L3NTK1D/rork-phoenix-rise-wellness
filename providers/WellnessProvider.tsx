@@ -235,6 +235,7 @@ interface WellnessData {
   lastVisualizationDate?: Date;
   meditation: MeditationData;
   elevenLabsApiKey?: string;
+  wakeWordEnabled?: boolean;
 }
 
 function isObject(val: unknown): val is Record<string, unknown> {
@@ -409,6 +410,7 @@ function isWellnessData(val: unknown): val is WellnessData {
 const STORAGE_KEY = "@phoenix_wellness_data";
 const VOICE_PATH_KEY = "@phoenix_cloned_voice_path";
 const ELEVEN_KEY = "@phoenix_elevenlabs_api_key";
+const WAKE_WORD_KEY = "@phoenix_wake_word_enabled";
 
 export const PRESET_THEMES: Theme[] = [
   {
@@ -495,6 +497,7 @@ export const [WellnessProvider, useWellness] = createContextHook(() => {
 
   const [isLoading, setIsLoading] = useState(true);
   const [elevenLabsApiKey, setElevenKeyState] = useState<string>("");
+  const [wakeWordEnabled, setWakeWordEnabledState] = useState<boolean>(false);
 
   const loadData = async () => {
     try {
@@ -515,6 +518,23 @@ export const [WellnessProvider, useWellness] = createContextHook(() => {
         }
       } catch (e) {
         console.warn('[WellnessProvider] Failed to load ElevenLabs key', e);
+      }
+
+      // Load wake word setting with web fallback
+      try {
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+          const webWakeWord = window.localStorage.getItem(WAKE_WORD_KEY);
+          if (webWakeWord !== null) {
+            setWakeWordEnabledState(webWakeWord === 'true');
+          }
+        }
+        const wakeWordSetting = await AsyncStorage.getItem(WAKE_WORD_KEY);
+        if (wakeWordSetting !== null) {
+          setWakeWordEnabledState(wakeWordSetting === 'true');
+        }
+        console.log('[WellnessProvider] Wake word enabled loaded:', wakeWordSetting === 'true');
+      } catch (e) {
+        console.warn('[WellnessProvider] Failed to load wake word setting', e);
       }
 
       if (stored) {
@@ -541,6 +561,7 @@ export const [WellnessProvider, useWellness] = createContextHook(() => {
           ...base,
           lastUpdated: new Date(base.lastUpdated as any),
           elevenLabsApiKey: (base as any).elevenLabsApiKey ?? undefined,
+          wakeWordEnabled: (base as any).wakeWordEnabled ?? false,
           meals: (base.meals as any[])?.map((m: any) => ({ ...m, date: new Date(m.date) })) || [],
           extendedMeals: (base.extendedMeals as any[])?.map((m: any) => ({ ...m, date: new Date(m.date) })) || [],
           addictions: (base.addictions as any[])?.map((a: any) => ({
@@ -708,6 +729,21 @@ export const [WellnessProvider, useWellness] = createContextHook(() => {
       }
     })();
   }, [elevenLabsApiKey]);
+
+  // Keep wake word setting persisted separately too
+  useEffect(() => {
+    (async () => {
+      try {
+        await AsyncStorage.setItem(WAKE_WORD_KEY, wakeWordEnabled.toString());
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+          window.localStorage.setItem(WAKE_WORD_KEY, wakeWordEnabled.toString());
+        }
+        console.log('[WellnessProvider] Wake word enabled persisted:', wakeWordEnabled);
+      } catch (e) {
+        console.warn('[WellnessProvider] Persist wake word setting failed', e);
+      }
+    })();
+  }, [wakeWordEnabled]);
 
   // Reset supplements daily
   useEffect(() => {
@@ -1340,6 +1376,16 @@ export const [WellnessProvider, useWellness] = createContextHook(() => {
     }
   }, []);
 
+  const updateWakeWordEnabled = useCallback((enabled: boolean) => {
+    try {
+      setWakeWordEnabledState(enabled);
+      setData((prev) => ({ ...prev, wakeWordEnabled: enabled }));
+      console.log('[WellnessProvider] updateWakeWordEnabled set:', enabled);
+    } catch (e) {
+      console.error('[WellnessProvider] updateWakeWordEnabled error', e);
+    }
+  }, []);
+
   return useMemo(() => ({
     // Data
     phoenixPoints,
@@ -1364,9 +1410,11 @@ export const [WellnessProvider, useWellness] = createContextHook(() => {
     dreamLifeScript: data.dreamLifeScript,
     visualizationStreak: data.visualizationStreak,
     elevenLabsApiKey: data.elevenLabsApiKey ?? elevenLabsApiKey,
+    wakeWordEnabled: data.wakeWordEnabled ?? wakeWordEnabled,
     
     // Updaters
     updateElevenLabsApiKey,
+    updateWakeWordEnabled,
     
     // Meal functions
     addMeal,
@@ -1492,6 +1540,9 @@ export const [WellnessProvider, useWellness] = createContextHook(() => {
     data.elevenLabsApiKey,
     elevenLabsApiKey,
     updateElevenLabsApiKey,
+    data.wakeWordEnabled,
+    wakeWordEnabled,
+    updateWakeWordEnabled,
     addVisionBoard,
     updateVisionBoard,
     deleteVisionBoard,
