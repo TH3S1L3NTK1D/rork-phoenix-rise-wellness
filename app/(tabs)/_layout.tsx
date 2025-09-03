@@ -2,7 +2,7 @@ import { Tabs, router } from "expo-router";
 import { TABS_ROUTES, TabRouteKey } from "@/constants/routes";
 import { Home, UtensilsCrossed, Plus, MoreHorizontal, TrendingUp, ChevronRight } from "lucide-react-native";
 import React, { memo, useCallback, useMemo, useRef, useState, type ReactNode } from "react";
-import { Dimensions, Platform, StyleSheet, Text, Pressable, View } from "react-native";
+import { Dimensions, Platform, StyleSheet, Text, Pressable, View, LayoutChangeEvent } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
 
@@ -52,6 +52,51 @@ class PanelErrorBoundary extends React.Component<{ children: ReactNode; onReset?
     return this.props.children as React.ReactElement;
   }
 }
+
+const TabBarItem = memo(function TabBarItem({
+  testID,
+  active,
+  label,
+  icon,
+  onPress,
+  onPressIn,
+}: {
+  testID: string;
+  active: boolean;
+  label: string;
+  icon: React.ReactNode;
+  onPress: () => void;
+  onPressIn?: () => void;
+}) {
+  const color = active ? "#FF4500" : "#8aa";
+  const handleLayout = useCallback((e: LayoutChangeEvent) => {
+    const { width, height } = e.nativeEvent.layout;
+    console.log(`[TabItem ${label}] layout`, { width, height });
+  }, [label]);
+
+  return (
+    <Pressable
+      testID={testID}
+      accessibilityRole="button"
+      style={styles.tabItem}
+      onPressIn={onPressIn}
+      onPress={onPress}
+      android_ripple={{ color: "rgba(255,69,0,0.15)", borderless: false }}
+      onLayout={handleLayout}
+    >
+      <View style={styles.tabItemContent}>
+        {icon}
+        <Text
+          style={[styles.tabLabel, { color }]}
+          numberOfLines={1}
+          ellipsizeMode="tail"
+        >
+          {label}
+        </Text>
+      </View>
+    </Pressable>
+  );
+}, (p, n) => p.active === n.active && p.label === n.label);
 
 const CustomTabBar = memo(function CustomTabBar({ state }: any) {
   const [openPanel, setOpenPanel] = useState<null | PanelKind>(null);
@@ -215,66 +260,52 @@ const CustomTabBar = memo(function CustomTabBar({ state }: any) {
       )}
 
       <LinearGradient colors={["#1A2B3C", "#003366"]} style={styles.tabBar}>
-        <Pressable
+        <TabBarItem
           testID="tab-home"
-          accessibilityRole="button"
-          style={styles.tabItem}
-          onPressIn={() => {
+          active={currentRoute === "index"}
+          label="Home"
+          icon={<Home size={28} color={currentRoute === "index" ? "#FF4500" : "#8aa"} />}
+          onPressIn={useCallback(() => {
             console.log("[Tab] home pressIn");
             if (Platform.OS === 'android') navigateToRoute("index");
-          }}
-          onPress={() => {
+          }, [navigateToRoute])}
+          onPress={useCallback(() => {
             if (Platform.OS !== 'android') navigateToRoute("index");
-          }}
-          android_ripple={{ color: "rgba(255,69,0,0.15)", borderless: false }}
-        >
-          <Home size={28} color={currentRoute === "index" ? "#FF4500" : "#8aa"} />
-          <Text style={[styles.tabLabel, { color: currentRoute === "index" ? "#FF4500" : "#8aa" }]} numberOfLines={1} ellipsizeMode="tail">Home</Text>
-        </Pressable>
+          }, [navigateToRoute])}
+        />
 
-        <Pressable
+        <TabBarItem
           testID="tab-track"
-          accessibilityRole="button"
-          style={styles.tabItem}
-          onPressIn={() => {
+          active={["meal-prep", "supplements", "addiction"].includes(currentRoute)}
+          label="Track"
+          icon={
+            <View ref={triggerRefs.track} collapsable={false} onLayout={() => measureTrigger('track')}>
+              <UtensilsCrossed
+                size={28}
+                color={["meal-prep", "supplements", "addiction"].includes(currentRoute) ? "#FF4500" : "#8aa"}
+              />
+            </View>
+          }
+          onPressIn={useCallback(() => {
             console.log("[Tab] track pressIn");
             if (Platform.OS === 'android') togglePanel('track');
-          }}
-          onPress={() => {
+          }, [togglePanel])}
+          onPress={useCallback(() => {
             if (Platform.OS !== 'android') togglePanel('track');
-          }}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          android_ripple={{ color: "rgba(255,69,0,0.15)", borderless: false }}
-        >
-          <View ref={triggerRefs.track} collapsable={false} onLayout={() => measureTrigger('track')}>
-            <UtensilsCrossed
-            size={28}
-            color={["meal-prep", "supplements", "addiction"].includes(currentRoute) ? "#FF4500" : "#8aa"}
-          />
-            <Text
-              style={[
-                styles.tabLabel,
-                { color: ["meal-prep", "supplements", "addiction"].includes(currentRoute) ? "#FF4500" : "#8aa" },
-              ]}
-              numberOfLines={1}
-              ellipsizeMode="tail"
-            >
-              Track
-            </Text>
-          </View>
-        </Pressable>
+          }, [togglePanel])}
+        />
 
         <Pressable
           testID="tab-quick"
           accessibilityRole="button"
           style={styles.centerButton}
-          onPressIn={() => {
+          onPressIn={useCallback(() => {
             console.log("[Tab] quick pressIn");
             if (Platform.OS === 'android') togglePanel('quick');
-          }}
-          onPress={() => {
+          }, [togglePanel])}
+          onPress={useCallback(() => {
             if (Platform.OS !== 'android') togglePanel('quick');
-          }}
+          }, [togglePanel])}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           android_ripple={{ color: "rgba(255,69,0,0.2)", borderless: true }}
         >
@@ -283,73 +314,47 @@ const CustomTabBar = memo(function CustomTabBar({ state }: any) {
           </View>
         </Pressable>
 
-        <Pressable
+        <TabBarItem
           testID="tab-progress"
-          accessibilityRole="button"
-          style={styles.tabItem}
-          onPressIn={() => {
+          active={["goals", "insights", "analytics"].includes(currentRoute)}
+          label="Progress"
+          icon={
+            <View ref={triggerRefs.progress} collapsable={false} onLayout={() => measureTrigger('progress')}>
+              <TrendingUp
+                size={28}
+                color={["goals", "insights", "analytics"].includes(currentRoute) ? "#FF4500" : "#8aa"}
+              />
+            </View>
+          }
+          onPressIn={useCallback(() => {
             console.log("[Tab] progress pressIn");
             if (Platform.OS === 'android') togglePanel('progress');
-          }}
-          onPress={() => {
+          }, [togglePanel])}
+          onPress={useCallback(() => {
             if (Platform.OS !== 'android') togglePanel('progress');
-          }}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          android_ripple={{ color: "rgba(255,69,0,0.15)", borderless: false }}
-        >
-          <View ref={triggerRefs.progress} collapsable={false} onLayout={() => measureTrigger('progress')}>
-            <TrendingUp
-            size={28}
-            color={["goals", "insights", "analytics"].includes(currentRoute) ? "#FF4500" : "#8aa"}
-          />
-            <Text
-              style={[
-                styles.tabLabel,
-                { color: ["goals", "insights", "analytics"].includes(currentRoute) ? "#FF4500" : "#8aa" },
-              ]}
-              numberOfLines={1}
-              ellipsizeMode="tail"
-            >
-              Progress
-            </Text>
-          </View>
-        </Pressable>
+          }, [togglePanel])}
+        />
 
-        <Pressable
+        <TabBarItem
           testID="tab-more"
-          accessibilityRole="button"
-          style={styles.tabItem}
-          onPressIn={() => {
+          active={["journal", "coach", "vision", "routines", "meditation", "settings"].includes(currentRoute)}
+          label="More"
+          icon={
+            <View ref={triggerRefs.more} collapsable={false} onLayout={() => measureTrigger('more')}>
+              <MoreHorizontal
+                size={28}
+                color={["journal", "coach", "vision", "routines", "meditation", "settings"].includes(currentRoute) ? "#FF4500" : "#8aa"}
+              />
+            </View>
+          }
+          onPressIn={useCallback(() => {
             console.log("[Tab] more pressIn");
             if (Platform.OS === 'android') togglePanel('more');
-          }}
-          onPress={() => {
+          }, [togglePanel])}
+          onPress={useCallback(() => {
             if (Platform.OS !== 'android') togglePanel('more');
-          }}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          android_ripple={{ color: "rgba(255,69,0,0.15)", borderless: false }}
-        >
-          <View ref={triggerRefs.more} collapsable={false} onLayout={() => measureTrigger('more')}>
-            <MoreHorizontal
-            size={28}
-            color={["journal", "coach", "vision", "routines", "meditation", "settings"].includes(currentRoute) ? "#FF4500" : "#8aa"}
-          />
-            <Text
-              style={[
-                styles.tabLabel,
-                {
-                  color: ["journal", "coach", "vision", "routines", "meditation", "settings"].includes(currentRoute)
-                    ? "#FF4500"
-                    : "#8aa",
-                },
-              ]}
-              numberOfLines={1}
-              ellipsizeMode="tail"
-            >
-              More
-            </Text>
-          </View>
-        </Pressable>
+          }, [togglePanel])}
+        />
       </LinearGradient>
     </>
   );
@@ -392,7 +397,7 @@ const DropdownPanel = memo(function DropdownPanel({
           onPressIn={Platform.OS === 'android' ? () => onSelect(opt.route) : undefined}
           testID={`dropdown-item-${opt.label}`}
         >
-          <Text style={styles.panelItemText}>{opt.label}</Text>
+          <Text style={[styles.panelItemText, opt.label === 'Settings' ? { fontSize: 12 } : null]} numberOfLines={1} ellipsizeMode="tail">{opt.label}</Text>
           <ChevronRight size={18} color="#334" />
         </Pressable>
       ))}
@@ -404,7 +409,7 @@ const styles = StyleSheet.create({
   tabBar: {
     flexDirection: "row",
     height: TAB_BAR_HEIGHT,
-    paddingBottom: Platform.OS === "ios" ? 25 : 8,
+    paddingBottom: Platform.select({ ios: 25, android: 4, web: 0, default: 8 }) as number,
     paddingTop: 8,
     paddingHorizontal: 10,
     alignItems: "center",
@@ -416,6 +421,11 @@ const styles = StyleSheet.create({
     flex: 1,
     flexBasis: 0,
     minWidth: 0,
+    paddingVertical: Platform.select({ android: 4, web: 0, default: 0 }) as number,
+  },
+  tabItemContent: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   tabLabel: {
     fontSize: 12,
