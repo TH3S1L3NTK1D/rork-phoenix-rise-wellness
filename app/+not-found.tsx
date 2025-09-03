@@ -9,6 +9,13 @@ export default function NotFoundScreen(): React.JSX.Element {
 
   useEffect(() => {
     try {
+      const isTabsGroupPath = typeof pathname === 'string' && pathname.startsWith('/(tabs)/');
+      if (Platform.OS === 'web' && isTabsGroupPath) {
+        const fixed = pathname.replace('/(tabs)', '') || '/';
+        console.warn('[RouteMismatch] Detected route-group path on web. Redirecting', { from: pathname, to: fixed });
+        router.replace(fixed as any);
+        return;
+      }
       console.error('[RouteMismatch] Unmatched route', JSON.stringify({ pathname, platform: Platform.OS }));
     } catch (e) {
       console.error('[RouteMismatch] Unmatched route (stringify failed)', { pathname, platform: Platform.OS });
