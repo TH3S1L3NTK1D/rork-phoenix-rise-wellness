@@ -5,7 +5,7 @@ import React, { useEffect } from "react";
 import { Platform, View, Text, TouchableOpacity, DevSettings, ScrollView } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { WellnessProvider } from "@/providers/WellnessProvider";
+import { WellnessProvider, useWellness } from "@/providers/WellnessProvider";
 import { pwaManager } from "@/utils/pwa";
 import { offlineStorage } from "@/utils/offlineStorage";
 import PWAInstallPrompt from "@/components/PWAInstallPrompt";
@@ -42,6 +42,204 @@ function RootLayoutNav() {
       <Stack.Screen name="index" options={{ headerShown: false }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
     </Stack>
+  );
+}
+
+const ANUNA_VOICE_ID = 'ahvd0TWxmVC87GTyJn2P' as const;
+
+const GlobalVoiceAgentInner = React.memo(function GlobalVoiceAgentInner() {
+  const { wakeWordEnabled, elevenLabsApiKey, addAddiction } = useWellness();
+  const wakeRecognizerRef = React.useRef<any>(null);
+  const cmdRecognizerRef = React.useRef<any>(null);
+  const isWeb = Platform.OS === 'web';
+
+  const speak = React.useCallback(async (text: string) => {
+    try {
+      const key = (elevenLabsApiKey ?? '').trim();
+      if (isWeb && key) {
+        const endpoint = `https://api.elevenlabs.io/v1/text-to-speech/${ANUNA_VOICE_ID}`;
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'xi-api-key': key,
+            'Content-Type': 'application/json',
+            'Accept': 'audio/mpeg',
+          },
+          body: JSON.stringify({
+            text,
+            voice_settings: { stability: 0.5, similarity_boost: 0.75 },
+          }),
+        });
+        if (res.ok) {
+          const buf = await res.arrayBuffer();
+          const blob = new Blob([buf], { type: 'audio/mpeg' });
+          const url = URL.createObjectURL(blob);
+          const audio = new (window as any).Audio(url);
+          await audio.play().catch((e: unknown) => console.log('[GlobalVoiceAgent] audio play error', e));
+          return;
+        }
+        console.warn('[GlobalVoiceAgent] ElevenLabs TTS failed', res.status);
+      }
+      if (isWeb && 'speechSynthesis' in window) {
+        const u = new SpeechSynthesisUtterance(text);
+        u.rate = 1.0; u.pitch = 1.0; u.volume = 1.0;
+        speechSynthesis.speak(u);
+      }
+    } catch (e) {
+      console.log('[GlobalVoiceAgent] speak error', e);
+      if (isWeb && 'speechSynthesis' in window) {
+        const u = new SpeechSynthesisUtterance(text);
+        speechSynthesis.speak(u);
+      }
+    }
+  }, [elevenLabsApiKey, isWeb]);
+
+  const dispatchFocusCoach = React.useCallback(() => {
+    try {
+      if (isWeb) {
+        window.dispatchEvent(new CustomEvent('phoenix:wake-word'));
+      }
+    } catch (e) {
+      console.log('[GlobalVoiceAgent] dispatchFocusCoach error', e);
+    }
+  }, [isWeb]);
+
+  const parseAndExecute = React.useCallback(async (raw: string) => {
+    try {
+      const text = (raw ?? '').toLowerCase();
+      console.log('[GlobalVoiceAgent] Command heard:', text);
+
+      const addAddictionMatch = text.match(/add (?:new )?addiction\s+([a-zA-Z0-9\- ]{2,40})/);
+      if (addAddictionMatch?.[1]) {
+        const name = addAddictionMatch[1].trim();
+        addAddiction(name);
+        await speak(`Added new addiction ${name}. I will track your streaks from today.`);
+        return;
+      }
+
+      if (text.includes('break habit') || text.includes('break the habit')) {
+        let tips = 'Here are evidence-based ways to break a habit: identify the trigger, replace the routine, add friction, stack a competing habit, and track streaks with rewards.';
+        try {
+          const q = encodeURIComponent('how to break a bad habit key steps');
+          const url = `https://r.jina.ai/http://www.google.com/search?q=${q}`;
+          const res = await fetch(url, { cache: 'no-store' });
+          if (res.ok) {
+            const md = await res.text();
+            const lines = md.split('\n').filter(l => l.trim().length > 0).slice(0, 8).join(' ');
+            if (lines && lines.length > 40) tips = lines.slice(0, 300) + '...';
+          }
+        } catch (e) {
+          console.log('[GlobalVoiceAgent] web fetch tips failed', e);
+        }
+        await speak(tips);
+        return;
+      }
+
+      await speak('Hey, I am listening. Say a command like add new addiction smoking.');
+    } catch (e) {
+      console.log('[GlobalVoiceAgent] parseAndExecute error', e);
+    }
+  }, [addAddiction, speak]);
+
+  const startCommandRecognition = React.useCallback(() => {
+    if (!isWeb) return;
+    try {
+      const SR: any = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
+      if (!SR) return;
+      const rec = new SR();
+      rec.continuous = false;
+      rec.interimResults = false;
+      rec.lang = 'en-US';
+      rec.onstart = () => console.log('[GlobalVoiceAgent] Command recognition start');
+      rec.onresult = (ev: any) => {
+        try {
+          const t = ev?.results?.[0]?.[0]?.transcript ?? '';
+          parseAndExecute(t);
+        } catch (e) {
+          console.log('[GlobalVoiceAgent] onresult error', e);
+        }
+      };
+      rec.onerror = (ev: any) => console.log('[GlobalVoiceAgent] command error', ev?.error);
+      rec.onend = () => {
+        cmdRecognizerRef.current = null;
+        if (wakeWordEnabled) {
+          setTimeout(() => startWakeRecognition(), 800);
+        }
+      };
+      cmdRecognizerRef.current = rec;
+      rec.start();
+    } catch (e) {
+      console.log('[GlobalVoiceAgent] startCommandRecognition error', e);
+    }
+  }, [isWeb, parseAndExecute, wakeWordEnabled]);
+
+  const startWakeRecognition = React.useCallback(() => {
+    if (!isWeb || !wakeWordEnabled) return;
+    try {
+      const SR: any = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
+      if (!SR) return;
+      const rec = new SR();
+      rec.continuous = true;
+      rec.interimResults = true;
+      rec.lang = 'en-US';
+      rec.onstart = () => console.log('[GlobalVoiceAgent] Wake recognition active');
+      rec.onresult = (ev: any) => {
+        try {
+          const idx = ev.results.length - 1;
+          const transcript = ev.results[idx][0].transcript.toLowerCase();
+          const matched = transcript.includes('hey anuna') || transcript.includes('anuna');
+          if (matched) {
+            console.log('Hey Anuna detected');
+            dispatchFocusCoach();
+            try { rec.stop(); } catch {}
+            setTimeout(() => startCommandRecognition(), 300);
+          }
+        } catch (e) {
+          console.log('[GlobalVoiceAgent] wake onresult error', e);
+        }
+      };
+      rec.onerror = (ev: any) => console.log('[GlobalVoiceAgent] wake error', ev?.error);
+      rec.onend = () => {
+        wakeRecognizerRef.current = null;
+        if (wakeWordEnabled) {
+          setTimeout(() => startWakeRecognition(), 1000);
+        }
+      };
+      wakeRecognizerRef.current = rec;
+      rec.start();
+    } catch (e) {
+      console.log('[GlobalVoiceAgent] startWakeRecognition error', e);
+    }
+  }, [dispatchFocusCoach, isWeb, startCommandRecognition, wakeWordEnabled]);
+
+  React.useEffect(() => {
+    if (!isWeb) return;
+    if (wakeWordEnabled) {
+      startWakeRecognition();
+    } else {
+      try {
+        wakeRecognizerRef.current?.stop?.();
+      } catch {}
+      try {
+        cmdRecognizerRef.current?.stop?.();
+      } catch {}
+    }
+    return () => {
+      try { wakeRecognizerRef.current?.stop?.(); } catch {}
+      try { cmdRecognizerRef.current?.stop?.(); } catch {}
+      wakeRecognizerRef.current = null;
+      cmdRecognizerRef.current = null;
+    };
+  }, [wakeWordEnabled, isWeb, startWakeRecognition]);
+
+  return null;
+});
+
+function GlobalVoiceAgent() {
+  return (
+    <ErrorBoundary>
+      <GlobalVoiceAgentInner />
+    </ErrorBoundary>
   );
 }
 
@@ -277,6 +475,7 @@ export default function RootLayout() {
             <WellnessProvider>
               <RootLayoutNav />
               {Platform.OS === 'web' && <PWAInstallPrompt />}
+              <GlobalVoiceAgent />
             </WellnessProvider>
           </GestureHandlerRootView>
         </QueryClientProvider>
