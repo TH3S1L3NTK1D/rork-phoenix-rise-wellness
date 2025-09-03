@@ -16,7 +16,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Send, Flame, RotateCcw, Volume2, Mic, Settings, Play, VolumeX, Radio } from 'lucide-react-native';
 import { useWellness } from '@/providers/WellnessProvider';
 import { Audio } from 'expo-av';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 
 
@@ -547,6 +546,8 @@ function PhoenixCoach() {
     }
   };
 
+  const ANUNA_VOICE_ID = 'ahvd0TWxmVC87GTyJn2P' as const;
+
   const arrayBufferToBase64 = (buffer: ArrayBuffer): string => {
     try {
       let binary = '';
@@ -572,8 +573,7 @@ function PhoenixCoach() {
         return;
       }
 
-      const clonedPath = await AsyncStorage.getItem('@phoenix_cloned_voice_path');
-      const endpoint = `https://api.elevenlabs.io/v1/text-to-speech/ahvd0TWxmVC87GTyJn2P`;
+      const endpoint = `https://api.elevenlabs.io/v1/text-to-speech/${ANUNA_VOICE_ID}`;
 
       const body = {
         text,
@@ -597,11 +597,6 @@ function PhoenixCoach() {
 
       if (!res.ok) {
         console.warn('[Coach] ElevenLabs TTS failed', res.status);
-        // fallback to XTTS if clonedPath exists
-        if (clonedPath) {
-          await playTTSWithClonedVoice(text, clonedPath);
-          return;
-        }
         speakWithBrowser(text);
         return;
       }
@@ -620,14 +615,7 @@ function PhoenixCoach() {
       const { sound } = await Audio.Sound.createAsync({ uri: `data:audio/mpeg;base64,${base64}` });
       await sound.playAsync();
     } catch (error) {
-      console.log('[Coach] speakWithAPI error, using browser or fallback', error);
-      try {
-        const clonedPath = await AsyncStorage.getItem('@phoenix_cloned_voice_path');
-        if (clonedPath) {
-          await playTTSWithClonedVoice(text, clonedPath);
-          return;
-        }
-      } catch {}
+      console.log('[Coach] speakWithAPI error, using browser fallback', error);
       speakWithBrowser(text);
     }
   };
@@ -660,19 +648,11 @@ function PhoenixCoach() {
   // Function to speak coach messages with voice selection
   const speakCoachMessage = async (text: string) => {
     try {
-      const clonedPath = await AsyncStorage.getItem('@phoenix_cloned_voice_path');
       const key = (elevenLabsApiKey ?? '').trim();
-
       if (key) {
         await speakWithAPI(text);
         return;
       }
-
-      if (clonedPath) {
-        await playTTSWithClonedVoice(text, clonedPath);
-        return;
-      }
-
       speakWithBrowser(text);
     } catch (e) {
       console.log('speakCoachMessage fallback', e);
@@ -680,38 +660,7 @@ function PhoenixCoach() {
     }
   };
 
-  const playTTSWithClonedVoice = async (text: string, voicePath: string) => {
-    try {
-      const form = new FormData();
-      form.append('text', text);
-      form.append('language', 'en');
-      form.append('clonedVoicePath', voicePath);
 
-      const res = await fetch('https://th3s1l3ntk1d-phoenix-rise-tts-server.hf.space/run/predict', {
-        method: 'POST',
-        body: form,
-      });
-      if (!res.ok) {
-        throw new Error(`TTS error ${res.status}`);
-      }
-      const arrayBuffer = await res.arrayBuffer();
-
-      if (Platform.OS === 'web') {
-        const blob = new Blob([arrayBuffer], { type: 'audio/mpeg' });
-        const url = URL.createObjectURL(blob);
-        const audio = new (window as any).Audio(url);
-        audio.play().catch((e: unknown) => console.log('[Coach] web audio play error', e));
-        return;
-      }
-
-      const base64 = arrayBufferToBase64(arrayBuffer);
-      const { sound } = await Audio.Sound.createAsync({ uri: `data:audio/mpeg;base64,${base64}` });
-      await sound.playAsync();
-    } catch (e) {
-      console.error('playTTSWithClonedVoice error', e);
-      speakWithBrowser(text);
-    }
-  };
 
   // Enhanced Text-to-Speech function with emotional intelligence
   const speakText = (text: string, messageType?: 'victory' | 'stress' | 'motivation' | 'default') => {
