@@ -236,6 +236,12 @@ interface WellnessData {
   meditation: MeditationData;
   elevenLabsApiKey?: string;
   wakeWordEnabled?: boolean;
+  soundEffectsEnabled?: boolean;
+  backgroundMusicEnabled?: boolean;
+  autoReadResponsesEnabled?: boolean;
+  voiceModeEnabled?: boolean;
+  emotionalIntelligenceEnabled?: boolean;
+  ttsSpeed?: number;
 }
 
 function isObject(val: unknown): val is Record<string, unknown> {
@@ -411,6 +417,12 @@ const STORAGE_KEY = "@phoenix_wellness_data";
 const VOICE_PATH_KEY = "@phoenix_cloned_voice_path";
 const ELEVEN_KEY = "@phoenix_elevenlabs_api_key";
 const WAKE_WORD_KEY = "@phoenix_wake_word_enabled";
+const SFX_KEY = "@phoenix_voice_sfx_enabled";
+const BGM_KEY = "@phoenix_voice_bgm_enabled";
+const AUTOREAD_KEY = "@phoenix_voice_autoread_enabled";
+const VOICEMODE_KEY = "@phoenix_voice_mode_enabled";
+const EQ_KEY = "@phoenix_voice_emotional_intelligence_enabled";
+const TTS_SPEED_KEY = "@phoenix_voice_tts_speed";
 
 export const PRESET_THEMES: Theme[] = [
   {
@@ -497,7 +509,13 @@ export const [WellnessProvider, useWellness] = createContextHook(() => {
 
   const [isLoading, setIsLoading] = useState(true);
   const [elevenLabsApiKey, setElevenKeyState] = useState<string>("");
-  const [wakeWordEnabled, setWakeWordEnabledState] = useState<boolean>(false);
+  const [wakeWordEnabled, setWakeWordEnabledState] = useState<boolean>(true);
+  const [soundEffectsEnabled, setSfxEnabled] = useState<boolean>(true);
+  const [backgroundMusicEnabled, setBgmEnabled] = useState<boolean>(true);
+  const [autoReadResponsesEnabled, setAutoReadEnabled] = useState<boolean>(true);
+  const [voiceModeEnabled, setVoiceModeEnabled] = useState<boolean>(true);
+  const [emotionalIntelligenceEnabled, setEqEnabled] = useState<boolean>(true);
+  const [ttsSpeed, setTtsSpeed] = useState<number>(0.8);
 
   const loadData = async () => {
     try {
@@ -520,21 +538,41 @@ export const [WellnessProvider, useWellness] = createContextHook(() => {
         console.warn('[WellnessProvider] Failed to load ElevenLabs key', e);
       }
 
-      // Load wake word setting with web fallback
+      // Load wake word and voice settings with web fallback
       try {
         if (Platform.OS === 'web' && typeof window !== 'undefined') {
           const webWakeWord = window.localStorage.getItem(WAKE_WORD_KEY);
-          if (webWakeWord !== null) {
-            setWakeWordEnabledState(webWakeWord === 'true');
-          }
+          if (webWakeWord !== null) setWakeWordEnabledState(webWakeWord === 'true');
+          const webSfx = window.localStorage.getItem(SFX_KEY);
+          if (webSfx !== null) setSfxEnabled(webSfx === 'true');
+          const webBgm = window.localStorage.getItem(BGM_KEY);
+          if (webBgm !== null) setBgmEnabled(webBgm === 'true');
+          const webAuto = window.localStorage.getItem(AUTOREAD_KEY);
+          if (webAuto !== null) setAutoReadEnabled(webAuto === 'true');
+          const webVm = window.localStorage.getItem(VOICEMODE_KEY);
+          if (webVm !== null) setVoiceModeEnabled(webVm === 'true');
+          const webEq = window.localStorage.getItem(EQ_KEY);
+          if (webEq !== null) setEqEnabled(webEq === 'true');
+          const webSpeed = window.localStorage.getItem(TTS_SPEED_KEY);
+          if (webSpeed !== null) setTtsSpeed(Number(webSpeed) || 0.8);
         }
         const wakeWordSetting = await AsyncStorage.getItem(WAKE_WORD_KEY);
-        if (wakeWordSetting !== null) {
-          setWakeWordEnabledState(wakeWordSetting === 'true');
-        }
-        console.log('[WellnessProvider] Wake word enabled loaded:', wakeWordSetting === 'true');
+        if (wakeWordSetting !== null) setWakeWordEnabledState(wakeWordSetting === 'true');
+        const sfxSetting = await AsyncStorage.getItem(SFX_KEY);
+        if (sfxSetting !== null) setSfxEnabled(sfxSetting === 'true');
+        const bgmSetting = await AsyncStorage.getItem(BGM_KEY);
+        if (bgmSetting !== null) setBgmEnabled(bgmSetting === 'true');
+        const autoSetting = await AsyncStorage.getItem(AUTOREAD_KEY);
+        if (autoSetting !== null) setAutoReadEnabled(autoSetting === 'true');
+        const vmSetting = await AsyncStorage.getItem(VOICEMODE_KEY);
+        if (vmSetting !== null) setVoiceModeEnabled(vmSetting === 'true');
+        const eqSetting = await AsyncStorage.getItem(EQ_KEY);
+        if (eqSetting !== null) setEqEnabled(eqSetting === 'true');
+        const speedSetting = await AsyncStorage.getItem(TTS_SPEED_KEY);
+        if (speedSetting !== null) setTtsSpeed(Number(speedSetting) || 0.8);
+        console.log('[WellnessProvider] Voice settings loaded', { wake: wakeWordSetting, sfx: sfxSetting, bgm: bgmSetting, auto: autoSetting, vm: vmSetting, eq: eqSetting, speed: speedSetting });
       } catch (e) {
-        console.warn('[WellnessProvider] Failed to load wake word setting', e);
+        console.warn('[WellnessProvider] Failed to load voice settings', e);
       }
 
       if (stored) {
@@ -561,7 +599,13 @@ export const [WellnessProvider, useWellness] = createContextHook(() => {
           ...base,
           lastUpdated: new Date(base.lastUpdated as any),
           elevenLabsApiKey: (base as any).elevenLabsApiKey ?? undefined,
-          wakeWordEnabled: (base as any).wakeWordEnabled ?? false,
+          wakeWordEnabled: (base as any).wakeWordEnabled ?? true,
+          soundEffectsEnabled: (base as any).soundEffectsEnabled ?? true,
+          backgroundMusicEnabled: (base as any).backgroundMusicEnabled ?? true,
+          autoReadResponsesEnabled: (base as any).autoReadResponsesEnabled ?? true,
+          voiceModeEnabled: (base as any).voiceModeEnabled ?? true,
+          emotionalIntelligenceEnabled: (base as any).emotionalIntelligenceEnabled ?? true,
+          ttsSpeed: (base as any).ttsSpeed ?? 0.8,
           meals: (base.meals as any[])?.map((m: any) => ({ ...m, date: new Date(m.date) })) || [],
           extendedMeals: (base.extendedMeals as any[])?.map((m: any) => ({ ...m, date: new Date(m.date) })) || [],
           addictions: (base.addictions as any[])?.map((a: any) => ({
@@ -730,20 +774,32 @@ export const [WellnessProvider, useWellness] = createContextHook(() => {
     })();
   }, [elevenLabsApiKey]);
 
-  // Keep wake word setting persisted separately too
+  // Persist voice settings separately (with web fallback)
   useEffect(() => {
     (async () => {
       try {
         await AsyncStorage.setItem(WAKE_WORD_KEY, wakeWordEnabled.toString());
+        await AsyncStorage.setItem(SFX_KEY, soundEffectsEnabled.toString());
+        await AsyncStorage.setItem(BGM_KEY, backgroundMusicEnabled.toString());
+        await AsyncStorage.setItem(AUTOREAD_KEY, autoReadResponsesEnabled.toString());
+        await AsyncStorage.setItem(VOICEMODE_KEY, voiceModeEnabled.toString());
+        await AsyncStorage.setItem(EQ_KEY, emotionalIntelligenceEnabled.toString());
+        await AsyncStorage.setItem(TTS_SPEED_KEY, String(ttsSpeed));
         if (Platform.OS === 'web' && typeof window !== 'undefined') {
           window.localStorage.setItem(WAKE_WORD_KEY, wakeWordEnabled.toString());
+          window.localStorage.setItem(SFX_KEY, soundEffectsEnabled.toString());
+          window.localStorage.setItem(BGM_KEY, backgroundMusicEnabled.toString());
+          window.localStorage.setItem(AUTOREAD_KEY, autoReadResponsesEnabled.toString());
+          window.localStorage.setItem(VOICEMODE_KEY, voiceModeEnabled.toString());
+          window.localStorage.setItem(EQ_KEY, emotionalIntelligenceEnabled.toString());
+          window.localStorage.setItem(TTS_SPEED_KEY, String(ttsSpeed));
         }
-        console.log('[WellnessProvider] Wake word enabled persisted:', wakeWordEnabled);
+        console.log('[WellnessProvider] Voice settings persisted', { wakeWordEnabled, soundEffectsEnabled, backgroundMusicEnabled, autoReadResponsesEnabled, voiceModeEnabled, emotionalIntelligenceEnabled, ttsSpeed });
       } catch (e) {
-        console.warn('[WellnessProvider] Persist wake word setting failed', e);
+        console.warn('[WellnessProvider] Persist voice settings failed', e);
       }
     })();
-  }, [wakeWordEnabled]);
+  }, [wakeWordEnabled, soundEffectsEnabled, backgroundMusicEnabled, autoReadResponsesEnabled, voiceModeEnabled, emotionalIntelligenceEnabled, ttsSpeed]);
 
   // Reset supplements daily
   useEffect(() => {
@@ -1386,6 +1442,67 @@ export const [WellnessProvider, useWellness] = createContextHook(() => {
     }
   }, []);
 
+  const updateSoundEffectsEnabled = useCallback((enabled: boolean) => {
+    try {
+      setSfxEnabled(enabled);
+      setData((prev) => ({ ...prev, soundEffectsEnabled: enabled }));
+      console.log('[WellnessProvider] updateSoundEffectsEnabled set:', enabled);
+    } catch (e) {
+      console.error('[WellnessProvider] updateSoundEffectsEnabled error', e);
+    }
+  }, []);
+
+  const updateBackgroundMusicEnabled = useCallback((enabled: boolean) => {
+    try {
+      setBgmEnabled(enabled);
+      setData((prev) => ({ ...prev, backgroundMusicEnabled: enabled }));
+      console.log('[WellnessProvider] updateBackgroundMusicEnabled set:', enabled);
+    } catch (e) {
+      console.error('[WellnessProvider] updateBackgroundMusicEnabled error', e);
+    }
+  }, []);
+
+  const updateAutoReadResponsesEnabled = useCallback((enabled: boolean) => {
+    try {
+      setAutoReadEnabled(enabled);
+      setData((prev) => ({ ...prev, autoReadResponsesEnabled: enabled }));
+      console.log('[WellnessProvider] updateAutoReadResponsesEnabled set:', enabled);
+    } catch (e) {
+      console.error('[WellnessProvider] updateAutoReadResponsesEnabled error', e);
+    }
+  }, []);
+
+  const updateVoiceModeEnabled = useCallback((enabled: boolean) => {
+    try {
+      setVoiceModeEnabled(enabled);
+      setData((prev) => ({ ...prev, voiceModeEnabled: enabled }));
+      console.log('[WellnessProvider] updateVoiceModeEnabled set:', enabled);
+    } catch (e) {
+      console.error('[WellnessProvider] updateVoiceModeEnabled error', e);
+    }
+  }, []);
+
+  const updateEmotionalIntelligenceEnabled = useCallback((enabled: boolean) => {
+    try {
+      setEqEnabled(enabled);
+      setData((prev) => ({ ...prev, emotionalIntelligenceEnabled: enabled }));
+      console.log('[WellnessProvider] updateEmotionalIntelligenceEnabled set:', enabled);
+    } catch (e) {
+      console.error('[WellnessProvider] updateEmotionalIntelligenceEnabled error', e);
+    }
+  }, []);
+
+  const updateTtsSpeed = useCallback((speed: number) => {
+    try {
+      const clamped = Math.max(0.5, Math.min(1.5, speed));
+      setTtsSpeed(clamped);
+      setData((prev) => ({ ...prev, ttsSpeed: clamped }));
+      console.log('[WellnessProvider] updateTtsSpeed set:', clamped);
+    } catch (e) {
+      console.error('[WellnessProvider] updateTtsSpeed error', e);
+    }
+  }, []);
+
   return useMemo(() => ({
     // Data
     phoenixPoints,
@@ -1411,10 +1528,22 @@ export const [WellnessProvider, useWellness] = createContextHook(() => {
     visualizationStreak: data.visualizationStreak,
     elevenLabsApiKey: data.elevenLabsApiKey ?? elevenLabsApiKey,
     wakeWordEnabled: data.wakeWordEnabled ?? wakeWordEnabled,
+    soundEffectsEnabled: data.soundEffectsEnabled ?? soundEffectsEnabled,
+    backgroundMusicEnabled: data.backgroundMusicEnabled ?? backgroundMusicEnabled,
+    autoReadResponsesEnabled: data.autoReadResponsesEnabled ?? autoReadResponsesEnabled,
+    voiceModeEnabled: data.voiceModeEnabled ?? voiceModeEnabled,
+    emotionalIntelligenceEnabled: data.emotionalIntelligenceEnabled ?? emotionalIntelligenceEnabled,
+    ttsSpeed: data.ttsSpeed ?? ttsSpeed,
     
     // Updaters
     updateElevenLabsApiKey,
     updateWakeWordEnabled,
+    updateSoundEffectsEnabled,
+    updateBackgroundMusicEnabled,
+    updateAutoReadResponsesEnabled,
+    updateVoiceModeEnabled,
+    updateEmotionalIntelligenceEnabled,
+    updateTtsSpeed,
     
     // Meal functions
     addMeal,
@@ -1543,6 +1672,18 @@ export const [WellnessProvider, useWellness] = createContextHook(() => {
     data.wakeWordEnabled,
     wakeWordEnabled,
     updateWakeWordEnabled,
+    soundEffectsEnabled,
+    backgroundMusicEnabled,
+    autoReadResponsesEnabled,
+    voiceModeEnabled,
+    emotionalIntelligenceEnabled,
+    ttsSpeed,
+    updateSoundEffectsEnabled,
+    updateBackgroundMusicEnabled,
+    updateAutoReadResponsesEnabled,
+    updateVoiceModeEnabled,
+    updateEmotionalIntelligenceEnabled,
+    updateTtsSpeed,
     addVisionBoard,
     updateVisionBoard,
     deleteVisionBoard,

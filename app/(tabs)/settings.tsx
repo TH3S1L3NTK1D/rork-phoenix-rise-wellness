@@ -31,7 +31,7 @@ interface UserProfile {
 const PROFILE_STORAGE_KEY = "@phoenix_user_profile";
 
 function SettingsScreen() {
-  const { phoenixPoints, meals, extendedMeals, goals, journalEntries, supplements, addictions, currentTheme, updateTheme, resetToPhoenixTheme, elevenLabsApiKey, updateElevenLabsApiKey, wakeWordEnabled, updateWakeWordEnabled } = useWellness();
+  const { phoenixPoints, meals, extendedMeals, goals, journalEntries, supplements, addictions, currentTheme, updateTheme, resetToPhoenixTheme, elevenLabsApiKey, updateElevenLabsApiKey, wakeWordEnabled, updateWakeWordEnabled, soundEffectsEnabled, backgroundMusicEnabled, autoReadResponsesEnabled, voiceModeEnabled, emotionalIntelligenceEnabled, ttsSpeed, updateSoundEffectsEnabled, updateBackgroundMusicEnabled, updateAutoReadResponsesEnabled, updateVoiceModeEnabled, updateEmotionalIntelligenceEnabled, updateTtsSpeed } = useWellness();
   const [clonedVoicePath, setClonedVoicePath] = useState<string>("");
   const [activeTab, setActiveTab] = useState<"profile" | "data" | "theme" | "voice">("profile");
   const [profile, setProfile] = useState<UserProfile>({
@@ -1647,9 +1647,7 @@ function SettingsScreen() {
         <View style={styles.voiceSettingRow}>
           <Text style={[styles.voiceSettingLabel, { color: currentTheme.colors.text }]}>Current Voice:</Text>
           <Text style={[styles.voiceSettingValue, { color: currentTheme.colors.primary }]}> 
-            {selectedVoice === 'default' ? 'Default Voice' : 
-             selectedVoice === 'clone' ? 'Clone My Voice' : 
-             selectedVoice === 'mentor' ? 'Upload Mentor Voice' : 'Default Voice'}
+            Anuna (ElevenLabs)
           </Text>
         </View>
         
@@ -1657,18 +1655,6 @@ function SettingsScreen() {
           <Text style={[styles.voiceSettingLabel, { color: currentTheme.colors.text }]}>API Status:</Text>
           <Text style={[styles.voiceSettingValue, { color: (elevenLabsApiKeyLocal || elevenLabsApiKey) ? '#4CAF50' : '#666' }]}> 
             {(elevenLabsApiKeyLocal || elevenLabsApiKey) ? 'API Key Configured' : 'No API Key'}
-          </Text>
-        </View>
-        
-        <View style={styles.voiceSettingRow}>
-          <Text style={[styles.voiceSettingLabel, { color: currentTheme.colors.text }]}>Status:</Text>
-          <Text style={[styles.voiceSettingValue, { 
-            color: selectedVoice === 'default' ? '#4CAF50' : 
-                   selectedVoice === 'clone' && clonedVoiceId ? '#4CAF50' : '#666' 
-          }]}> 
-            {selectedVoice === 'default' ? 'Active (Browser TTS)' : 
-             selectedVoice === 'clone' && clonedVoiceId ? 'Active (Cloned Voice)' : 
-             selectedVoice === 'clone' ? 'Clone Not Created' : 'Coming Soon'}
           </Text>
         </View>
         
@@ -1704,7 +1690,93 @@ function SettingsScreen() {
             />
           </Pressable>
         </View>
-        
+
+        <View style={styles.voiceSettingRow}>
+          <Text style={[styles.voiceSettingLabel, { color: currentTheme.colors.text }]}>Sound Effects</Text>
+          <Pressable
+            testID="toggle-sfx"
+            style={[styles.toggleSwitch, { backgroundColor: soundEffectsEnabled ? currentTheme.colors.primary : 'rgba(255,255,255,0.2)', borderColor: soundEffectsEnabled ? currentTheme.colors.primary : 'rgba(255,255,255,0.3)' }]}
+            onPress={() => { const v = !soundEffectsEnabled; updateSoundEffectsEnabled(v); console.log('[Settings] SFX:', v); }}
+          >
+            <View style={[styles.toggleThumb, { backgroundColor: '#FFFFFF', transform: [{ translateX: soundEffectsEnabled ? 20 : 2 }] }]} />
+          </Pressable>
+        </View>
+
+        <View style={styles.voiceSettingRow}>
+          <Text style={[styles.voiceSettingLabel, { color: currentTheme.colors.text }]}>Background Music</Text>
+          <Pressable
+            testID="toggle-bgm"
+            style={[styles.toggleSwitch, { backgroundColor: backgroundMusicEnabled ? currentTheme.colors.primary : 'rgba(255,255,255,0.2)', borderColor: backgroundMusicEnabled ? currentTheme.colors.primary : 'rgba(255,255,255,0.3)' }]}
+            onPress={() => { const v = !backgroundMusicEnabled; updateBackgroundMusicEnabled(v); console.log('[Settings] BGM:', v); }}
+          >
+            <View style={[styles.toggleThumb, { backgroundColor: '#FFFFFF', transform: [{ translateX: backgroundMusicEnabled ? 20 : 2 }] }]} />
+          </Pressable>
+        </View>
+
+        <View style={styles.voiceSettingRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.voiceSettingLabel, { color: currentTheme.colors.text }]}>Auto-read Responses</Text>
+            <Text style={{ color: currentTheme.colors.text, opacity: 0.7, marginTop: 4, fontSize: 12 }}>Speak assistant replies automatically</Text>
+          </View>
+          <Pressable
+            testID="toggle-autoread"
+            style={[styles.toggleSwitch, { backgroundColor: autoReadResponsesEnabled ? currentTheme.colors.primary : 'rgba(255,255,255,0.2)', borderColor: autoReadResponsesEnabled ? currentTheme.colors.primary : 'rgba(255,255,255,0.3)' }]}
+            onPress={() => { const v = !autoReadResponsesEnabled; updateAutoReadResponsesEnabled(v); console.log('[Settings] Auto-read:', v); }}
+          >
+            <View style={[styles.toggleThumb, { backgroundColor: '#FFFFFF', transform: [{ translateX: autoReadResponsesEnabled ? 20 : 2 }] }]} />
+          </Pressable>
+        </View>
+
+        <View style={styles.voiceSettingRow}>
+          <Text style={[styles.voiceSettingLabel, { color: currentTheme.colors.text }]}>Voice Mode</Text>
+          <Pressable
+            testID="toggle-voicemode"
+            style={[styles.toggleSwitch, { backgroundColor: voiceModeEnabled ? currentTheme.colors.primary : 'rgba(255,255,255,0.2)', borderColor: voiceModeEnabled ? currentTheme.colors.primary : 'rgba(255,255,255,0.3)' }]}
+            onPress={() => { const v = !voiceModeEnabled; updateVoiceModeEnabled(v); console.log('[Settings] Voice Mode:', v); }}
+          >
+            <View style={[styles.toggleThumb, { backgroundColor: '#FFFFFF', transform: [{ translateX: voiceModeEnabled ? 20 : 2 }] }]} />
+          </Pressable>
+        </View>
+
+        <View style={styles.voiceSettingRow}>
+          <Text style={[styles.voiceSettingLabel, { color: currentTheme.colors.text }]}>Emotional Intelligence</Text>
+          <Pressable
+            testID="toggle-ei"
+            style={[styles.toggleSwitch, { backgroundColor: emotionalIntelligenceEnabled ? currentTheme.colors.primary : 'rgba(255,255,255,0.2)', borderColor: emotionalIntelligenceEnabled ? currentTheme.colors.primary : 'rgba(255,255,255,0.3)' }]}
+            onPress={() => { const v = !emotionalIntelligenceEnabled; updateEmotionalIntelligenceEnabled(v); console.log('[Settings] Emotional Intelligence:', v); }}
+          >
+            <View style={[styles.toggleThumb, { backgroundColor: '#FFFFFF', transform: [{ translateX: emotionalIntelligenceEnabled ? 20 : 2 }] }]} />
+          </Pressable>
+        </View>
+
+        <View style={[styles.sliderRow]}>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.voiceSettingLabel, { color: currentTheme.colors.text }]}>Speed</Text>
+            <Text style={{ color: currentTheme.colors.text, opacity: 0.7, marginTop: 4, fontSize: 12 }}>{ttsSpeed.toFixed(1)}x</Text>
+          </View>
+          <View style={styles.speedControls}>
+            <TouchableOpacity
+              testID="speed-decrease"
+              style={[styles.speedButton, { backgroundColor: currentTheme.colors.card, borderColor: currentTheme.colors.primary }]}
+              onPress={() => { const next = Math.max(0.5, +(ttsSpeed - 0.1).toFixed(1)); updateTtsSpeed(next); console.log('[Settings] Speed:', next); }}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.speedButtonText, { color: currentTheme.colors.text }]}>-</Text>
+            </TouchableOpacity>
+            <View style={[styles.sliderTrack, { backgroundColor: currentTheme.colors.primary + '22' }]}>
+              <View style={[styles.sliderFill, { backgroundColor: currentTheme.colors.primary, width: `${((ttsSpeed - 0.5) / 1.0) * 100}%` }]} />
+            </View>
+            <TouchableOpacity
+              testID="speed-increase"
+              style={[styles.speedButton, { backgroundColor: currentTheme.colors.card, borderColor: currentTheme.colors.primary }]}
+              onPress={() => { const next = Math.min(1.5, +(ttsSpeed + 0.1).toFixed(1)); updateTtsSpeed(next); console.log('[Settings] Speed:', next); }}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.speedButtonText, { color: currentTheme.colors.text }]}>+</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
         <TouchableOpacity 
           testID="settings-voice-test"
           style={[styles.testVoiceButton, { backgroundColor: currentTheme.colors.primary + '20' }]}
@@ -1723,17 +1795,8 @@ function SettingsScreen() {
             }
           }}
         >
-          <Text style={[styles.testVoiceButtonText, { color: currentTheme.colors.primary }]}>🔊 Test Cloned Voice</Text>
+          <Text style={[styles.testVoiceButtonText, { color: currentTheme.colors.primary }]}>🔊 Test Voice</Text>
         </TouchableOpacity>
-        
-        {clonedVoiceId && (
-          <View style={styles.voiceSettingRow}>
-            <Text style={[styles.voiceSettingLabel, { color: currentTheme.colors.text }]}>Clone ID:</Text>
-            <Text style={[styles.voiceSettingValue, { color: currentTheme.colors.primary }]}> 
-              {clonedVoiceId.substring(0, 12)}...
-            </Text>
-          </View>
-        )}
       </View>
     </View>
   );
@@ -2890,6 +2953,40 @@ const styles = StyleSheet.create({
   testVoiceButtonText: {
     fontSize: 16,
     fontWeight: '600',
+  },
+  sliderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  speedControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  speedButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+  },
+  speedButtonText: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  sliderTrack: {
+    flex: 1,
+    height: 8,
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  sliderFill: {
+    height: '100%',
+    borderRadius: 4,
   },
   toggleSwitch: {
     width: 50,
