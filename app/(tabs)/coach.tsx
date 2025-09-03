@@ -16,6 +16,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Send, Flame, RotateCcw, Volume2, Mic, Settings, Play, VolumeX, Radio } from 'lucide-react-native';
 import { useWellness } from '@/providers/WellnessProvider';
 import { Audio } from 'expo-av';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 
 
@@ -625,7 +626,7 @@ export default function PhoenixCoach() {
       if (Platform.OS === 'web') {
         const blob = new Blob([arrayBuffer], { type: 'audio/mpeg' });
         const url = URL.createObjectURL(blob);
-        const audio = new Audio(url as any);
+        const audio = new (window as any).Audio(url);
         audio.play();
         return;
       }
