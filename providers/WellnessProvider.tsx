@@ -237,6 +237,7 @@ interface WellnessData {
   meditation: MeditationData;
   elevenLabsApiKey?: string;
   assemblyAiApiKey?: string;
+  openWeatherApiKey?: string;
   wakeWordEnabled?: boolean;
   soundEffectsEnabled?: boolean;
   backgroundMusicEnabled?: boolean;
@@ -419,6 +420,7 @@ const STORAGE_KEY = "@phoenix_wellness_data";
 const VOICE_PATH_KEY = "@phoenix_cloned_voice_path";
 const ELEVEN_KEY = "@phoenix_elevenlabs_api_key";
 const ASSEMBLY_KEY = "@phoenix_assemblyai_api_key";
+const WEATHER_KEY = "@phoenix_openweather_api_key";
 const WAKE_WORD_KEY = "@phoenix_wake_word_enabled";
 const SFX_KEY = "@phoenix_voice_sfx_enabled";
 const BGM_KEY = "@phoenix_voice_bgm_enabled";
@@ -520,13 +522,14 @@ export const [WellnessProvider, useWellness] = createContextHook(() => {
   const [voiceModeEnabled, setVoiceModeEnabled] = useState<boolean>(true);
   const [emotionalIntelligenceEnabled, setEqEnabled] = useState<boolean>(true);
   const [ttsSpeed, setTtsSpeed] = useState<number>(0.8);
+  const [openWeatherApiKey, setOpenWeatherKeyState] = useState<string>("");
 
   const loadData = async () => {
     try {
       const stored = await AsyncStorage.getItem(STORAGE_KEY);
       console.log('[WellnessProvider] loadData() fetched bytes:', stored ? stored.length : 0);
 
-      // Load ElevenLabs API key with web fallback
+      // Load API keys with web fallback
       try {
         if (Platform.OS === 'web' && typeof window !== 'undefined') {
           const webKey = window.localStorage.getItem(ELEVEN_KEY);
@@ -542,8 +545,12 @@ export const [WellnessProvider, useWellness] = createContextHook(() => {
         if (aaiWeb) setAssemblyKeyState(aaiWeb);
         const aaiKey = await AsyncStorage.getItem(ASSEMBLY_KEY);
         if (aaiKey && aaiKey.trim().length > 0) setAssemblyKeyState(aaiKey);
+        const owWeb = Platform.OS === 'web' && typeof window !== 'undefined' ? window.localStorage.getItem(WEATHER_KEY) : null;
+        if (owWeb) setOpenWeatherKeyState(owWeb);
+        const owKey = await AsyncStorage.getItem(WEATHER_KEY);
+        if (owKey && owKey.trim().length > 0) setOpenWeatherKeyState(owKey);
       } catch (e) {
-        console.warn('[WellnessProvider] Failed to load ElevenLabs key', e);
+        console.warn('[WellnessProvider] Failed to load API keys', e);
       }
 
       // Load wake word and voice settings with web fallback
@@ -807,6 +814,7 @@ export const [WellnessProvider, useWellness] = createContextHook(() => {
       try {
         await AsyncStorage.setItem(ELEVEN_KEY, elevenLabsApiKey ?? "");
         await AsyncStorage.setItem(ASSEMBLY_KEY, assemblyAiApiKey ?? "");
+        await AsyncStorage.setItem(WEATHER_KEY, openWeatherApiKey ?? "");
         if (Platform.OS === 'web' && typeof window !== 'undefined') {
           if (elevenLabsApiKey && elevenLabsApiKey.trim().length > 0) {
             window.localStorage.setItem(ELEVEN_KEY, elevenLabsApiKey);
@@ -818,13 +826,18 @@ export const [WellnessProvider, useWellness] = createContextHook(() => {
           } else {
             window.localStorage.removeItem(ASSEMBLY_KEY);
           }
+          if (openWeatherApiKey && openWeatherApiKey.trim().length > 0) {
+            window.localStorage.setItem(WEATHER_KEY, openWeatherApiKey);
+          } else {
+            window.localStorage.removeItem(WEATHER_KEY);
+          }
         }
-        console.log('[WellnessProvider] Keys persisted', { elevenLen: (elevenLabsApiKey ?? '').length, assemblyLen: (assemblyAiApiKey ?? '').length });
+        console.log('[WellnessProvider] Keys persisted', { elevenLen: (elevenLabsApiKey ?? '').length, assemblyLen: (assemblyAiApiKey ?? '').length, weatherLen: (openWeatherApiKey ?? '').length });
       } catch (e) {
         console.warn('[WellnessProvider] Persist key failed', e);
       }
     })();
-  }, [elevenLabsApiKey, assemblyAiApiKey]);
+  }, [elevenLabsApiKey, assemblyAiApiKey, openWeatherApiKey]);
 
   // Persist voice settings separately (with web fallback)
   useEffect(() => {
@@ -1495,6 +1508,17 @@ export const [WellnessProvider, useWellness] = createContextHook(() => {
     }
   }, []);
 
+  const updateOpenWeatherApiKey = useCallback((key: string) => {
+    try {
+      const sanitized = (key ?? '').trim();
+      setOpenWeatherKeyState(sanitized);
+      setData((prev) => ({ ...prev, openWeatherApiKey: sanitized }));
+      console.log('[WellnessProvider] updateOpenWeatherApiKey set length:', sanitized.length);
+    } catch (e) {
+      console.error('[WellnessProvider] updateOpenWeatherApiKey error', e);
+    }
+  }, []);
+
   const updateWakeWordEnabled = useCallback((enabled: boolean) => {
     try {
       setWakeWordEnabledState(enabled);
@@ -1591,6 +1615,7 @@ export const [WellnessProvider, useWellness] = createContextHook(() => {
     visualizationStreak: data.visualizationStreak,
     elevenLabsApiKey: data.elevenLabsApiKey ?? elevenLabsApiKey,
     assemblyAiApiKey: data.assemblyAiApiKey ?? assemblyAiApiKey,
+    openWeatherApiKey: data.openWeatherApiKey ?? openWeatherApiKey,
     wakeWordEnabled: data.wakeWordEnabled ?? wakeWordEnabled,
     soundEffectsEnabled: data.soundEffectsEnabled ?? soundEffectsEnabled,
     backgroundMusicEnabled: data.backgroundMusicEnabled ?? backgroundMusicEnabled,
@@ -1602,6 +1627,7 @@ export const [WellnessProvider, useWellness] = createContextHook(() => {
     // Updaters
     updateElevenLabsApiKey,
     updateAssemblyAiApiKey,
+    updateOpenWeatherApiKey,
     updateWakeWordEnabled,
     updateSoundEffectsEnabled,
     updateBackgroundMusicEnabled,
@@ -1736,6 +1762,8 @@ export const [WellnessProvider, useWellness] = createContextHook(() => {
     assemblyAiApiKey,
     updateElevenLabsApiKey,
     updateAssemblyAiApiKey,
+    openWeatherApiKey,
+    updateOpenWeatherApiKey,
     data.wakeWordEnabled,
     wakeWordEnabled,
     updateWakeWordEnabled,

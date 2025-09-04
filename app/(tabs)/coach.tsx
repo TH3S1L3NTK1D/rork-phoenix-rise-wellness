@@ -36,6 +36,7 @@ function PhoenixCoach() {
     assemblyAiApiKey,
     wakeWordEnabled,
     ttsSpeed,
+    openWeatherApiKey,
   } = useWellness();
 
   const theme = currentTheme.colors;
@@ -216,6 +217,60 @@ function PhoenixCoach() {
     try { await speakWithAPI(text); } catch (e) { console.log('speakCoachMessage error', e); }
   };
 
+  const fetchWeather = useCallback(async (): Promise<string | null> => {
+    try {
+      const key = (openWeatherApiKey ?? '').trim();
+      if (!key) return null;
+      let url = '';
+      if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.geolocation) {
+        const coords = await new Promise<{lat: number; lon: number} | null>((resolve) => {
+          try {
+            navigator.geolocation.getCurrentPosition(
+              (pos) => resolve({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
+              () => resolve(null),
+              { enableHighAccuracy: false, timeout: 5000, maximumAge: 60000 }
+            );
+          } catch {
+            resolve(null);
+          }
+        });
+        if (coords) {
+          url = `https://api.openweathermap.org/data/2.5/weather?lat=${coords.lat}&lon=${coords.lon}&appid=${encodeURIComponent(key)}&units=metric`;
+        }
+      }
+      if (!url) {
+        const city = 'New York';
+        url = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(city)}&appid=${encodeURIComponent(key)}&units=metric`;
+      }
+      console.log('[Coach][Weather] Fetching', url);
+      const res = await fetch(url);
+      if (!res.ok) {
+        console.log('[Coach][Weather] API error', res.status);
+        return null;
+      }
+      const json = await res.json();
+      const name: string = (json?.name as string) ?? 'Your area';
+      const main = json?.main ?? {};
+      const weather0 = Array.isArray(json?.weather) ? json.weather[0] : undefined;
+      const temp = typeof main?.temp === 'number' ? Math.round(main.temp) : undefined;
+      const feels = typeof main?.feels_like === 'number' ? Math.round(main.feels_like) : undefined;
+      const humidity = typeof main?.humidity === 'number' ? main.humidity : undefined;
+      const wind = json?.wind?.speed ? Math.round(json.wind.speed) : undefined;
+      const cond = typeof weather0?.description === 'string' ? weather0.description : 'conditions unavailable';
+      const parts: string[] = [];
+      if (typeof temp === 'number') parts.push(`${temp}°C`);
+      if (typeof feels === 'number') parts.push(`feels like ${feels}°C`);
+      if (typeof humidity === 'number') parts.push(`humidity ${humidity}%`);
+      if (typeof wind === 'number') parts.push(`wind ${wind} m/s`);
+      const summary = `Live weather for ${name}: ${cond}; ${parts.join(', ')}`;
+      console.log('[Coach][Weather] Summary', summary);
+      return summary;
+    } catch (e) {
+      console.log('[Coach][Weather] fetch error', e);
+      return null;
+    }
+  }, []);
+
   const sendMessage = async (text?: string) => {
     const messageText = (text ?? inputText ?? '').trim();
     if (!messageText) return;
@@ -230,12 +285,19 @@ function PhoenixCoach() {
     
     try {
       console.log('[Coach] Calling AI chat mutation...');
-      const result = await aiChat.mutateAsync({
-        messages: [
-          { role: 'system', content: 'You are Anuna, a concise motivational wellness coach. Provide unique, helpful responses.' },
-          { role: 'user', content: messageText },
-        ] as any,
-      });
+      const messages: any[] = [
+        { role: 'system', content: 'You are Anuna, a concise motivational wellness coach. Provide unique, helpful responses.' },
+      ];
+      if (/\bweather\b/i.test(messageText)) {
+        const weather = await fetchWeather();
+        if (weather) {
+          messages.push({ role: 'system', content: `Context: ${weather}. Include this live data in your answer.` });
+        } else {
+          console.log('[Coach] Weather lookup failed or no key');
+        }
+      }
+      messages.push({ role: 'user', content: messageText });
+      const result = await aiChat.mutateAsync({ messages });
       
       console.log('[Coach] AI response received:', result);
       const reply = (result?.completion as string)?.trim() || generateSmartResponse(messageText).text;
@@ -529,12 +591,13 @@ function PhoenixCoach() {
       addChatMessage({ text: transcript.trim(), isUser: true });
       startTypingAnimation();
       
-      const result = await aiChat.mutateAsync({ 
-        messages: [ 
-          { role: 'system', content: 'You are Anuna, a concise motivational wellness coach. Provide unique, helpful responses.' }, 
-          { role: 'user', content: transcript.trim() } 
-        ] as any 
-      });
+      const voiceMessages: any[] = [ { role: 'system', content: 'You are Anuna, a concise motivational wellness coach. Provide unique, helpful responses.' } ];
+      if (/\bweather\b/i.test(transcript)) {
+        const weather = await fetchWeather();
+        if (weather) voiceMessages.push({ role: 'system', content: `Context: ${weather}. Include this live data in your answer.` });
+      }
+      voiceMessages.push({ role: 'user', content: transcript.trim() });
+      const result = await aiChat.mutateAsync({ messages: voiceMessages });
       
       console.log('[Coach] Voice AI response:', result);
       const reply = (result?.completion as string)?.trim() || generateSmartResponse(transcript).text;

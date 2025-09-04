@@ -31,7 +31,7 @@ interface UserProfile {
 const PROFILE_STORAGE_KEY = "@phoenix_user_profile";
 
 function SettingsScreen() {
-  const { phoenixPoints, meals, extendedMeals, goals, journalEntries, supplements, addictions, currentTheme, updateTheme, resetToPhoenixTheme, elevenLabsApiKey, updateElevenLabsApiKey, assemblyAiApiKey, updateAssemblyAiApiKey, wakeWordEnabled, updateWakeWordEnabled, soundEffectsEnabled, backgroundMusicEnabled, autoReadResponsesEnabled, voiceModeEnabled, emotionalIntelligenceEnabled, ttsSpeed, updateSoundEffectsEnabled, updateBackgroundMusicEnabled, updateAutoReadResponsesEnabled, updateVoiceModeEnabled, updateEmotionalIntelligenceEnabled, updateTtsSpeed } = useWellness();
+  const { phoenixPoints, meals, extendedMeals, goals, journalEntries, supplements, addictions, currentTheme, updateTheme, resetToPhoenixTheme, elevenLabsApiKey, updateElevenLabsApiKey, assemblyAiApiKey, updateAssemblyAiApiKey, openWeatherApiKey, updateOpenWeatherApiKey, wakeWordEnabled, updateWakeWordEnabled, soundEffectsEnabled, backgroundMusicEnabled, autoReadResponsesEnabled, voiceModeEnabled, emotionalIntelligenceEnabled, ttsSpeed, updateSoundEffectsEnabled, updateBackgroundMusicEnabled, updateAutoReadResponsesEnabled, updateVoiceModeEnabled, updateEmotionalIntelligenceEnabled, updateTtsSpeed } = useWellness();
   const [clonedVoicePath, setClonedVoicePath] = useState<string>("");
   const [activeTab, setActiveTab] = useState<"profile" | "data" | "theme" | "voice">("profile");
   const [profile, setProfile] = useState<UserProfile>({
@@ -51,6 +51,7 @@ function SettingsScreen() {
   const ageInputId = 'settings-age';
   const motivationInputId = 'settings-motivation';
   const apiKeyInputId = 'settings-api-key';
+  const weatherApiKeyInputId = 'settings-weather-api-key';
   const colorPrimaryId = 'settings-color-primary';
   const colorSecondaryId = 'settings-color-secondary';
   const colorBackgroundId = 'settings-color-background';
@@ -61,6 +62,7 @@ function SettingsScreen() {
   const ageRef = useRef<string>("");
   const motivationRef = useRef<string>("");
   const apiKeyRef = useRef<string>("");
+  const weatherApiKeyRef = useRef<string>("");
   const primaryRef = useRef<string>("");
   const secondaryRef = useRef<string>("");
   const backgroundRef = useRef<string>("");
@@ -85,10 +87,12 @@ function SettingsScreen() {
   const [playingSampleIndex, setPlayingSampleIndex] = useState<number | null>(null);
   const [elevenLabsApiKeyLocal, setElevenLabsApiKeyLocal] = useState<string>('');
   const [assemblyAiApiKeyLocal, setAssemblyAiApiKeyLocal] = useState<string>('');
+  const [openWeatherApiKeyLocal, setOpenWeatherApiKeyLocal] = useState<string>('');
   const [voicePersonality, setVoicePersonality] = useState<string>('motivator');
   const [tempApiKey, setTempApiKey] = useState<string>('');
 
   const [apiKeyVisible, setApiKeyVisible] = useState<boolean>(false);
+  const [weatherApiKeyVisible, setWeatherApiKeyVisible] = useState<boolean>(false);
   const [apiConnectionStatus, setApiConnectionStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
   const [voiceCloneStatus, setVoiceCloneStatus] = useState<'idle' | 'creating' | 'success' | 'error'>('idle');
   const [clonedVoiceId, setClonedVoiceId] = useState<string | null>(null);
@@ -132,6 +136,10 @@ function SettingsScreen() {
   }, [customColors]);
 
   useEffect(() => {
+    setOpenWeatherApiKeyLocal(openWeatherApiKey || '');
+  }, [openWeatherApiKey]);
+
+  useEffect(() => {
     setCustomColors(currentTheme.colors);
   }, [currentTheme]);
 
@@ -141,6 +149,7 @@ function SettingsScreen() {
     loadClonedVoiceId();
     setElevenLabsApiKeyLocal(elevenLabsApiKey || '');
     setAssemblyAiApiKeyLocal(assemblyAiApiKey || '');
+    setOpenWeatherApiKeyLocal(openWeatherApiKey || '');
     (async () => {
       try {
         const stored = await AsyncStorage.getItem('@phoenix_cloned_voice_path');
@@ -334,6 +343,28 @@ function SettingsScreen() {
     setPromptVisible(false);
   };
 
+  const saveWeatherApiKey = async () => {
+    try {
+      const key = (Platform.OS === 'web'
+        ? ((document.getElementById(weatherApiKeyInputId) as HTMLInputElement | null)?.value ?? '')
+        : (weatherApiKeyRef.current ?? '')).trim();
+      if (key.length === 0) {
+        updateOpenWeatherApiKey('');
+        setOpenWeatherApiKeyLocal('');
+        Alert.alert('Success', 'OpenWeather API key removed');
+        console.log('[Settings] OpenWeather key removed');
+        return;
+      }
+      updateOpenWeatherApiKey(key);
+      setOpenWeatherApiKeyLocal(key);
+      Alert.alert('Success', 'OpenWeather API key saved!');
+      console.log('[Settings] OpenWeather key saved len:', key.length);
+    } catch (error) {
+      console.error('Error saving OpenWeather API key:', error);
+      Alert.alert('Error', 'Failed to save OpenWeather API key');
+    }
+  };
+
   const readInputValue = (id: string): string => {
     if (Platform.OS === 'web') {
       const el = document.getElementById(id) as HTMLInputElement | null;
@@ -348,6 +379,8 @@ function SettingsScreen() {
         return motivationRef.current ?? '';
       case apiKeyInputId:
         return apiKeyRef.current ?? '';
+      case weatherApiKeyInputId:
+        return weatherApiKeyRef.current ?? '';
       case colorPrimaryId:
         return primaryRef.current ?? '';
       case colorSecondaryId:
@@ -1623,6 +1656,59 @@ function SettingsScreen() {
       </View>
 
       <View style={[styles.glassCard, { backgroundColor: currentTheme.colors.card }]}>
+        <Text style={[styles.cardTitle, { color: currentTheme.colors.text }]}>OpenWeatherMap API</Text>
+        <Text style={[styles.apiDescription, { color: currentTheme.colors.text }]}>Enter your free API key from openweathermap.org to enable live weather in chat.</Text>
+        <View style={styles.apiKeySection}>
+          <Text style={[styles.inputLabel, { color: currentTheme.colors.text }]}>API Key</Text>
+          <View style={styles.apiKeyInputContainer}>
+            {Platform.OS === 'android' ? (
+              <TouchableOpacity
+                testID="weather-key-prompt"
+                style={[styles.apiKeyInput, { justifyContent: 'center' }]}
+                onPress={() => openPrompt({ title: 'Enter OpenWeather API Key', initial: weatherApiKeyRef.current || openWeatherApiKeyLocal, secure: true, targetId: weatherApiKeyInputId })}
+                activeOpacity={0.7}
+              >
+                <Text style={{ color: currentTheme.colors.text }}>
+                  {(weatherApiKeyRef.current || openWeatherApiKeyLocal) ? (weatherApiKeyVisible ? (weatherApiKeyRef.current || openWeatherApiKeyLocal) : '••••••••••••••••') : 'Tap to enter API key'}
+                </Text>
+              </TouchableOpacity>
+            ) : (
+              <TextInput
+                nativeID={weatherApiKeyInputId}
+                style={[styles.apiKeyInput, { color: currentTheme.colors.text, borderColor: currentTheme.colors.primary }]}
+                defaultValue={openWeatherApiKeyLocal}
+                onChangeText={Platform.OS !== 'web' ? (text: string) => { weatherApiKeyRef.current = text; } : undefined}
+                placeholder="owm-xxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                placeholderTextColor="#8B9DC3"
+                secureTextEntry={!weatherApiKeyVisible}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+            )}
+            <TouchableOpacity 
+              style={[styles.visibilityButton, { backgroundColor: currentTheme.colors.primary + '20' }]}
+              onPress={() => setWeatherApiKeyVisible(!weatherApiKeyVisible)}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.visibilityButtonText, { color: currentTheme.colors.primary }]}>
+                {weatherApiKeyVisible ? '👁️' : '👁️‍🗨️'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.apiButtonsContainer}>
+            <Pressable 
+              style={({ pressed }) => [styles.apiButton, { backgroundColor: pressed ? currentTheme.colors.primary + '35' : currentTheme.colors.primary + '20' }]}
+              onPress={saveWeatherApiKey}
+              android_ripple={{ color: '#ffffff20' }}
+              testID="save-openweather-key"
+            >
+              <Text style={[styles.apiButtonText, { color: currentTheme.colors.primary }]}>💾 Save Key</Text>
+            </Pressable>
+          </View>
+        </View>
+      </View>
+
+      <View style={[styles.glassCard, { backgroundColor: currentTheme.colors.card }]}>
         <Text style={[styles.cardTitle, { color: currentTheme.colors.text }]}>ElevenLabs API Configuration</Text>
         <Text style={[styles.apiDescription, { color: currentTheme.colors.text }]}> 
           Connect your ElevenLabs account to enable advanced voice cloning features
@@ -1709,6 +1795,12 @@ function SettingsScreen() {
           </View>
         </View>
         
+        <View style={styles.instructionsSection}>
+          <Text style={[styles.instructionsTitle, { color: currentTheme.colors.text }]}>OpenWeather Free Tier</Text>
+          <Text style={[styles.instructionStep, { color: currentTheme.colors.text }]}>• Create a free account at openweathermap.org ➜ API keys</Text>
+          <Text style={[styles.instructionStep, { color: currentTheme.colors.text }]}>• Paste the key above. We use it only on your device.</Text>
+        </View>
+
         <View style={styles.instructionsSection}>
           <Text style={[styles.instructionsTitle, { color: currentTheme.colors.text }]}>How to get your API key:</Text>
           <Text style={[styles.instructionStep, { color: currentTheme.colors.text }]}>1. Visit elevenlabs.io and create an account</Text>
