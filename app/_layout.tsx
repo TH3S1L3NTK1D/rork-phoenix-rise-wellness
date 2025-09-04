@@ -57,10 +57,28 @@ const GlobalVoiceAgentInner = React.memo(function GlobalVoiceAgentInner() {
   const [listeningModal, setListeningModal] = React.useState<boolean>(false);
   const [busy, setBusy] = React.useState<boolean>(false);
   const cancelledRef = React.useRef<boolean>(false);
+  const micPermissionGrantedRef = React.useRef<boolean>(false);
+  const audioGloballyMutedRef = React.useRef<boolean>(false);
+  const wakeLoopRunningRef = React.useRef<boolean>(false);
+
+  const setGlobalAudioEnabled = React.useCallback(async (enabled: boolean) => {
+    try {
+      if (Platform.OS === 'web') return;
+      await Audio.setIsEnabledAsync(enabled);
+      console.log('[GlobalVoiceAgent] Global audio', enabled ? 'ENABLED' : 'MUTED');
+    } catch (e) {
+      console.log('[GlobalVoiceAgent] setGlobalAudioEnabled error', e);
+    }
+  }, []);
 
   const speak = React.useCallback(async (text: string) => {
     try {
       const key = (elevenLabsApiKey ?? '').trim();
+      if (!isWeb && audioGloballyMutedRef.current) {
+        console.log('[GlobalVoiceAgent] Unmuting before TTS playback');
+        await setGlobalAudioEnabled(true);
+        audioGloballyMutedRef.current = false;
+      }
       if (isWeb && key) {
         const endpoint = `https://api.elevenlabs.io/v1/text-to-speech/${ANUNA_VOICE_ID}`;
         const res = await fetch(endpoint, {
@@ -128,7 +146,7 @@ const GlobalVoiceAgentInner = React.memo(function GlobalVoiceAgentInner() {
         speechSynthesis.speak(u);
       }
     }
-  }, [elevenLabsApiKey, isWeb, ttsSpeed]);
+  }, [elevenLabsApiKey, isWeb, ttsSpeed, setGlobalAudioEnabled]);
 
   const chatMutation = trpc.ai.chat.useMutation();
 
@@ -302,12 +320,17 @@ const GlobalVoiceAgentInner = React.memo(function GlobalVoiceAgentInner() {
   const handleFullCommandNative = React.useCallback(async (aaiKey: string) => {
     try {
       setBusy(true);
-      const perm = await Audio.requestPermissionsAsync();
-      if (!perm.granted) {
+      if (!micPermissionGrantedRef.current) {
+        console.log('[GlobalVoiceAgent] Mic permission denied (cached)');
         Alert.alert('Mic access needed');
         setListeningModal(false);
         setBusy(false);
         return;
+      }
+      if (audioGloballyMutedRef.current) {
+        console.log('[GlobalVoiceAgent] Unmuting for full command capture');
+        await setGlobalAudioEnabled(true);
+        audioGloballyMutedRef.current = false;
       }
       await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
       const rec = new Audio.Recording();
@@ -330,21 +353,32 @@ const GlobalVoiceAgentInner = React.memo(function GlobalVoiceAgentInner() {
     } finally {
       setBusy(false);
     }
-  }, [processChat, transcribeAudio]);
+  }, [processChat, transcribeAudio, setGlobalAudioEnabled]);
 
   React.useEffect(() => {
     if (isWeb || !wakeWordEnabled) return;
+    if (wakeLoopRunningRef.current) return;
+    wakeLoopRunningRef.current = true;
     let cancelled = false;
     cancelledRef.current = false;
     (async () => {
       try {
         const perm = await Audio.requestPermissionsAsync();
         console.log('[GlobalVoiceAgent] Mic permission (native):', perm);
+        micPermissionGrantedRef.current = !!perm.granted;
         if (!perm.granted) {
-          Alert.alert('Mic access needed');
+          console.log('[GlobalVoiceAgent] Mic permission denied - stopping listener');
+          Alert.alert('Mic permission denied');
           return;
         }
         await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
+        try {
+          await setGlobalAudioEnabled(false);
+          audioGloballyMutedRef.current = true;
+          console.log('[GlobalVoiceAgent] Wake listener starting silently');
+        } catch (e) {
+          console.log('[GlobalVoiceAgent] Beep detected, adjusting audio', e);
+        }
       } catch (e) {
         console.log('[GlobalVoiceAgent] audio mode error', e);
       }
@@ -362,16 +396,35 @@ const GlobalVoiceAgentInner = React.memo(function GlobalVoiceAgentInner() {
           if (/\bhey\s*anuna\b/i.test(text) || /\banuna\b/i.test(text)) {
             console.log('[GlobalVoiceAgent] Hey Anuna detected (native)');
             dispatchFocusCoach();
+            if (audioGloballyMutedRef.current) {
+              console.log('[GlobalVoiceAgent] Unmuting on detection');
+              await setGlobalAudioEnabled(true);
+              audioGloballyMutedRef.current = false;
+            }
             setListeningModal(true);
             await handleFullCommandNative(assemblyAiApiKey ?? '');
+            try {
+              await setGlobalAudioEnabled(false);
+              audioGloballyMutedRef.current = true;
+            } catch (e) {
+              console.log('[GlobalVoiceAgent] Failed to remute after command', e);
+            }
           }
         } catch (e) {
           console.log('[GlobalVoiceAgent] wake loop error', e);
         }
       }
     })();
-    return () => { cancelled = true; cancelledRef.current = true; };
-  }, [isWeb, wakeWordEnabled, assemblyAiApiKey, dispatchFocusCoach, handleFullCommandNative, transcribeAudio]);
+    return () => {
+      cancelled = true;
+      cancelledRef.current = true;
+      wakeLoopRunningRef.current = false;
+      if (audioGloballyMutedRef.current) {
+        void setGlobalAudioEnabled(true);
+        audioGloballyMutedRef.current = false;
+      }
+    };
+  }, [isWeb, wakeWordEnabled, assemblyAiApiKey, dispatchFocusCoach, handleFullCommandNative, transcribeAudio, setGlobalAudioEnabled]);
 
   return (
     <>
