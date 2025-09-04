@@ -60,6 +60,7 @@ const GlobalVoiceAgentInner = React.memo(function GlobalVoiceAgentInner() {
   const micPermissionGrantedRef = React.useRef<boolean>(false);
   const audioGloballyMutedRef = React.useRef<boolean>(false);
   const wakeLoopRunningRef = React.useRef<boolean>(false);
+  const wakeShotTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const setGlobalAudioEnabled = React.useCallback(async (enabled: boolean) => {
     try {
@@ -361,14 +362,78 @@ const GlobalVoiceAgentInner = React.memo(function GlobalVoiceAgentInner() {
     wakeLoopRunningRef.current = true;
     let cancelled = false;
     cancelledRef.current = false;
+
+    const startWakeShotNative = async () => {
+      if (cancelled) return;
+      try {
+        if (!micPermissionGrantedRef.current) {
+          const perm = await Audio.requestPermissionsAsync();
+          console.log('[GlobalVoiceAgent] Mic permission (native):', perm);
+          micPermissionGrantedRef.current = !!perm.granted;
+          if (!perm.granted) {
+            console.log('[GlobalVoiceAgent] Mic access denied, stopping listener');
+            Alert.alert('Mic access denied, stopping listener');
+            return;
+          }
+        }
+        await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
+        if (!audioGloballyMutedRef.current) {
+          try {
+            await setGlobalAudioEnabled(false);
+            audioGloballyMutedRef.current = true;
+            console.log('[GlobalVoiceAgent] Audio muted');
+          } catch (e) {
+            console.log('[GlobalVoiceAgent] Beep detected, stopping', e);
+          }
+        }
+
+        const rec = new Audio.Recording();
+        await rec.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY as any);
+        await rec.startAsync();
+        await new Promise(r => setTimeout(r, 3000));
+        await rec.stopAndUnloadAsync();
+        const uri = rec.getURI();
+        if (cancelled || !uri) return;
+        const text = await transcribeAudio(uri, assemblyAiApiKey ?? '');
+        console.log('[GlobalVoiceAgent] Wake chunk transcript:', text);
+        const matched = /\bhey\s*anuna\b/i.test(text) || /\banuna\b/i.test(text);
+        if (matched) {
+          console.log('[GlobalVoiceAgent] Hey Anuna detected (native)');
+          dispatchFocusCoach();
+          if (audioGloballyMutedRef.current) {
+            console.log('[GlobalVoiceAgent] Unmuting on detection');
+            await setGlobalAudioEnabled(true);
+            audioGloballyMutedRef.current = false;
+          }
+          setListeningModal(true);
+          await handleFullCommandNative(assemblyAiApiKey ?? '');
+          try {
+            await setGlobalAudioEnabled(false);
+            audioGloballyMutedRef.current = true;
+          } catch (e) {
+            console.log('[GlobalVoiceAgent] Failed to remute after command', e);
+          }
+        }
+      } catch (e) {
+        console.log('[GlobalVoiceAgent] wake shot error', e);
+      } finally {
+        if (!cancelled && wakeWordEnabled) {
+          if (wakeShotTimerRef.current) clearTimeout(wakeShotTimerRef.current);
+          wakeShotTimerRef.current = setTimeout(() => {
+            void startWakeShotNative();
+          }, 1200);
+        }
+      }
+    };
+
     (async () => {
       try {
         const perm = await Audio.requestPermissionsAsync();
-        console.log('[GlobalVoiceAgent] Mic permission (native):', perm);
+        console.log('[GlobalVoiceAgent] Mic permission (native/init):', perm);
         micPermissionGrantedRef.current = !!perm.granted;
         if (!perm.granted) {
-          console.log('[GlobalVoiceAgent] Mic permission denied - stopping listener');
-          Alert.alert('Mic permission denied');
+          console.log('[GlobalVoiceAgent] Mic access denied, stopping listener');
+          Alert.alert('Mic access denied, stopping listener');
           return;
         }
         await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
@@ -377,48 +442,22 @@ const GlobalVoiceAgentInner = React.memo(function GlobalVoiceAgentInner() {
           audioGloballyMutedRef.current = true;
           console.log('[GlobalVoiceAgent] Wake listener starting silently');
         } catch (e) {
-          console.log('[GlobalVoiceAgent] Beep detected, adjusting audio', e);
+          console.log('[GlobalVoiceAgent] Beep detected, stopping', e);
         }
+        await startWakeShotNative();
       } catch (e) {
-        console.log('[GlobalVoiceAgent] audio mode error', e);
-      }
-      while (!cancelled) {
-        try {
-          const rec = new Audio.Recording();
-          await rec.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY as any);
-          await rec.startAsync();
-          await new Promise(r => setTimeout(r, 5000));
-          await rec.stopAndUnloadAsync();
-          const uri = rec.getURI();
-          if (cancelled || !uri) break;
-          const text = await transcribeAudio(uri, assemblyAiApiKey ?? '');
-          console.log('[GlobalVoiceAgent] Wake chunk transcript:', text);
-          if (/\bhey\s*anuna\b/i.test(text) || /\banuna\b/i.test(text)) {
-            console.log('[GlobalVoiceAgent] Hey Anuna detected (native)');
-            dispatchFocusCoach();
-            if (audioGloballyMutedRef.current) {
-              console.log('[GlobalVoiceAgent] Unmuting on detection');
-              await setGlobalAudioEnabled(true);
-              audioGloballyMutedRef.current = false;
-            }
-            setListeningModal(true);
-            await handleFullCommandNative(assemblyAiApiKey ?? '');
-            try {
-              await setGlobalAudioEnabled(false);
-              audioGloballyMutedRef.current = true;
-            } catch (e) {
-              console.log('[GlobalVoiceAgent] Failed to remute after command', e);
-            }
-          }
-        } catch (e) {
-          console.log('[GlobalVoiceAgent] wake loop error', e);
-        }
+        console.log('[GlobalVoiceAgent] audio init error', e);
       }
     })();
+
     return () => {
       cancelled = true;
       cancelledRef.current = true;
       wakeLoopRunningRef.current = false;
+      if (wakeShotTimerRef.current) {
+        clearTimeout(wakeShotTimerRef.current);
+        wakeShotTimerRef.current = null;
+      }
       if (audioGloballyMutedRef.current) {
         void setGlobalAudioEnabled(true);
         audioGloballyMutedRef.current = false;
