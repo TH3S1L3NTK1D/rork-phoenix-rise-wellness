@@ -52,6 +52,7 @@ function PhoenixCoach() {
   const [isTyping, setIsTyping] = useState<boolean>(false);
   const [isListening, setIsListening] = useState<boolean>(false);
   const [isSpeaking, setIsSpeaking] = useState<boolean>(false);
+  const [isMicEnabledLocal, setIsMicEnabledLocal] = useState<boolean>(false);
   type IntentKind = 'add_addiction' | 'set_goal' | 'log_meal';
   type PendingIntent = { kind: IntentKind; step: number; data: Record<string, any> } | null;
   const [pendingIntent, setPendingIntent] = useState<PendingIntent>(null);
@@ -498,6 +499,20 @@ function PhoenixCoach() {
   const openListeningModal = () => setListeningModalVisible(true);
   const closeListeningModal = () => setListeningModalVisible(false);
 
+  useEffect(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const handler = () => {
+        console.log('[Coach] Global wake detected event received');
+        setIsMicEnabledLocal(true);
+        openListeningModal();
+        setTimeout(() => { if (!isListening) { if (Platform.OS === 'web') startSpeechCaptureWeb(); else void startSpeechCaptureMobile(); } }, 250);
+      };
+      window.addEventListener('phoenix:wake-word', handler as any);
+      return () => { window.removeEventListener('phoenix:wake-word', handler as any); };
+    }
+    return () => {};
+  }, [isListening]);
+
   const detectHeyAnunaInText = (text: string) => {
     try {
       const matched = /\bhey\s+anuna\b/i.test(text ?? '');
@@ -891,15 +906,9 @@ function PhoenixCoach() {
   }, [assemblyAiApiKey, uploadToAssemblyAIAndTranscribe, transcribeMobileWithAssembly, handleVoiceQuery]);
 
   useEffect(() => {
-    if (!wakeWordEnabled) return;
-    if (Platform.OS === 'web') startWakeDetectionWeb(); else void startWakeDetectionMobile();
-    const sub = AppState.addEventListener('change', (s: AppStateStatus) => {
-      if (s === 'active' && wakeWordEnabled) {
-        if (Platform.OS === 'web') startWakeDetectionWeb(); else void startWakeDetectionMobile();
-      }
-    });
-    return () => { try { sub.remove(); } catch {} try { recognitionRef.current?.stop?.(); } catch {} };
-  }, [wakeWordEnabled, startWakeDetectionWeb, startWakeDetectionMobile]);
+    console.log('[Coach] Skipping local wake detection; awaiting global listener. wakeWordEnabled:', wakeWordEnabled);
+    return () => { try { recognitionRef.current?.stop?.(); } catch {} };
+  }, [wakeWordEnabled]);
 
   useEffect(() => {
     if (chatMessages.length === 0) {
@@ -980,8 +989,8 @@ function PhoenixCoach() {
             <TouchableOpacity testID="coach-header-clear" style={styles.headerBtn} onPress={handleClearChat}>
               <RotateCcw size={20} color={theme.text} />
             </TouchableOpacity>
-            <View style={[styles.headerMicDot, { backgroundColor: isListening ? theme.primary : 'transparent', borderColor: theme.primary }]}>
-              <Mic size={14} color={isListening ? 'white' : theme.primary} />
+            <View style={[styles.headerMicDot, { backgroundColor: isListening || isMicEnabledLocal ? theme.primary : 'transparent', borderColor: theme.primary }]}>
+              <Mic size={14} color={isListening || isMicEnabledLocal ? 'white' : theme.primary} />
             </View>
           </View>
         </View>
@@ -1016,9 +1025,21 @@ function PhoenixCoach() {
             onSubmitEditing={() => sendMessage()}
             blurOnSubmit={false}
           />
-          <TouchableOpacity testID="coach-mic" style={[styles.voiceButton, { backgroundColor: isListening ? theme.primary : 'rgba(255,255,255,0.1)', borderColor: theme.primary }]} onPress={() => {
-            void handleManualMic();
-          }}>
+          <TouchableOpacity
+            testID="coach-mic"
+            disabled={!isMicEnabledLocal}
+            style={[
+              styles.voiceButton,
+              { backgroundColor: isListening ? theme.primary : 'rgba(255,255,255,0.1)', borderColor: theme.primary, opacity: isMicEnabledLocal ? 1 : 0.5 }
+            ]}
+            onPress={() => {
+              if (!isMicEnabledLocal) {
+                console.log('[Coach][Mic] Ignored press: mic disabled (standby)');
+                Alert.alert('Voice', 'Say "Hey Anuna" to activate the mic');
+                return;
+              }
+              void handleManualMic();
+            }}>
             {isListening ? (
               <View style={styles.listeningIndicator}>
                 {Array.from({ length: 5 }).map((_, index) => (

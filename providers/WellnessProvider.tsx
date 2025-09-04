@@ -3,6 +3,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import createContextHook from "@nkzw/create-context-hook";
 import { Platform, InteractionManager, Alert, AppState, AppStateStatus } from "react-native";
 import { Audio } from 'expo-av';
+import * as FileSystem from 'expo-file-system';
 
 interface Meal {
   id: string;
@@ -523,6 +524,7 @@ export const [WellnessProvider, useWellness] = createContextHook(() => {
   const [emotionalIntelligenceEnabled, setEqEnabled] = useState<boolean>(true);
   const [ttsSpeed, setTtsSpeed] = useState<number>(0.8);
   const [openWeatherApiKey, setOpenWeatherKeyState] = useState<string>("");
+  const [isMicEnabled, setIsMicEnabled] = useState<boolean>(false);
 
   const loadData = async () => {
     try {
@@ -930,6 +932,118 @@ export const [WellnessProvider, useWellness] = createContextHook(() => {
   }, [data]);
 
   const phoenixPoints = useMemo(() => calculatePhoenixPoints(), [calculatePhoenixPoints]);
+
+  // Global wake word listener: enable mic after 'hey anuna'
+  useEffect(() => {
+    let cancelled = false as boolean;
+    let recognition: any = null;
+    let loopTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const detectWake = (text: string) => {
+      try {
+        const matched = /\bhey\s+anuna\b/i.test(text ?? '');
+        console.log('[WellnessProvider][Wake] detected:', matched, text);
+        if (matched) {
+          setIsMicEnabled(true);
+          if (Platform.OS === 'web' && typeof window !== 'undefined') {
+            try { window.dispatchEvent(new Event('phoenix:wake-detected')); } catch {}
+          }
+        }
+      } catch (e) { console.log('[WellnessProvider][Wake] detect error', e); }
+    };
+
+    const startWeb = () => {
+      try {
+        if (Platform.OS !== 'web') return;
+        const SR = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
+        if (!SR) { console.log('[WellnessProvider][Wake][Web] SpeechRecognition not supported'); return; }
+        recognition = new SR();
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        recognition.lang = 'en-US';
+        recognition.onstart = () => console.log('[WellnessProvider][Wake][Web] started');
+        recognition.onresult = (event: any) => {
+          try {
+            const last = event.results[event.results.length - 1];
+            const transcript = last && last[0] && typeof last[0].transcript === 'string' ? last[0].transcript : '';
+            detectWake(transcript);
+          } catch (e) { console.log('[WellnessProvider][Wake][Web] parse error', e); }
+        };
+        recognition.onerror = (ev: any) => console.log('[WellnessProvider][Wake][Web] error', ev?.error);
+        recognition.onend = () => {
+          if (!cancelled && wakeWordEnabled && !isMicEnabled) {
+            try { recognition.start(); } catch {}
+          }
+        };
+        if (wakeWordEnabled && !isMicEnabled) recognition.start();
+      } catch (e) { console.log('[WellnessProvider][Wake][Web] start error', e); }
+    };
+
+    const startMobileOnce = async () => {
+      try {
+        if (Platform.OS === 'web') return;
+        const perm = await Audio.requestPermissionsAsync();
+        console.log('[WellnessProvider][Wake][Mobile] Mic permission:', perm);
+        if (!perm.granted) { console.log('Mic access denied, stopping listener'); return; }
+        await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true, shouldDuckAndroid: true, staysActiveInBackground: false });
+        const rec = new Audio.Recording();
+        try { await rec.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY as any); } catch {}
+        await rec.startAsync();
+        setTimeout(async () => {
+          try { await rec.stopAndUnloadAsync(); } catch {}
+          const uri = rec.getURI();
+          try { await Audio.setAudioModeAsync({ allowsRecordingIOS: false }); } catch {}
+          if (!uri) return;
+          const key = (assemblyAiApiKey ?? '').trim();
+          if (!key) { console.log('[WellnessProvider][Wake][Mobile] Missing AssemblyAI key'); return; }
+          try {
+            const upload = await FileSystem.uploadAsync('https://api.assemblyai.com/v2/upload', uri, { httpMethod: 'POST', headers: { Authorization: key }, uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT });
+            if (upload.status >= 200 && upload.status < 300) {
+              const uj = JSON.parse(upload.body || '{}');
+              const audioUrl: string = uj?.upload_url ?? uj?.url ?? '';
+              if (audioUrl) {
+                const create = await fetch('https://api.assemblyai.com/v2/transcript', { method: 'POST', headers: { Authorization: key, 'Content-Type': 'application/json' }, body: JSON.stringify({ audio_url: audioUrl }) });
+                if (create.ok) {
+                  const cj = await create.json();
+                  const id: string = cj?.id ?? '';
+                  if (id) {
+                    const started = Date.now();
+                    while (Date.now() - started < 30000) {
+                      await new Promise(r => setTimeout(r, 1200));
+                      const poll = await fetch(`https://api.assemblyai.com/v2/transcript/${id}`, { headers: { Authorization: key } });
+                      const pj = await poll.json();
+                      const status: string = pj?.status ?? '';
+                      console.log('[WellnessProvider][Wake][Mobile] poll', status);
+                      if (status === 'completed') { detectWake((pj?.text as string) || ''); break; }
+                      if (status === 'error') { console.log('[WellnessProvider][Wake][Mobile] error', pj?.error); break; }
+                    }
+                  }
+                }
+              }
+            }
+          } catch (e) { console.log('[WellnessProvider][Wake][Mobile] transcribe error', e); }
+        }, 3000);
+      } catch (e) { console.log('[WellnessProvider][Wake][Mobile] start error', e); }
+    };
+
+    if (wakeWordEnabled && !isMicEnabled) {
+      if (Platform.OS === 'web') startWeb();
+      else {
+        const loop = async () => {
+          if (cancelled || !wakeWordEnabled || isMicEnabled) return;
+          await startMobileOnce();
+          if (!cancelled && wakeWordEnabled && !isMicEnabled) loopTimer = setTimeout(loop, 3500);
+        };
+        void loop();
+      }
+    }
+
+    return () => {
+      cancelled = true;
+      try { recognition?.stop?.(); } catch {}
+      if (loopTimer) clearTimeout(loopTimer);
+    };
+  }, [wakeWordEnabled, assemblyAiApiKey, isMicEnabled]);
 
   // Meal functions
   const addMeal = useCallback((meal: Omit<Meal, "id" | "date">) => {
