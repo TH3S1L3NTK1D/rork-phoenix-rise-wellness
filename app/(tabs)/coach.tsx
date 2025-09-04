@@ -6,6 +6,8 @@ import { Send, Flame, RotateCcw, Volume2, VolumeX, Mic } from 'lucide-react-nati
 import { useWellness } from '@/providers/WellnessProvider';
 import { trpc } from '@/lib/trpc';
 import { Audio } from 'expo-av';
+import * as FileSystem from 'expo-file-system';
+
 
 interface SmartResponse {
   text: string;
@@ -31,6 +33,7 @@ function PhoenixCoach() {
     journalEntries,
     currentTheme,
     elevenLabsApiKey,
+    assemblyAiApiKey,
     wakeWordEnabled,
     ttsSpeed,
   } = useWellness();
@@ -366,6 +369,88 @@ function PhoenixCoach() {
 
   const recordingRef = useRef<Audio.Recording | null>(null);
 
+  const uploadToAssemblyAIAndTranscribe = useCallback(async (apiKey: string, blob: Blob): Promise<string> => {
+    try {
+      console.log('[Coach][AAI] Uploading blob size', blob.size);
+      const uploadRes = await fetch('https://api.assemblyai.com/v2/upload', {
+        method: 'POST',
+        headers: { Authorization: apiKey },
+        body: blob,
+      });
+      if (!uploadRes.ok) {
+        console.log('[Coach][AAI] upload failed', uploadRes.status);
+        throw new Error('upload-failed');
+      }
+      const uploadJson = await uploadRes.json();
+      const audioUrl: string = uploadJson?.upload_url ?? uploadJson?.url ?? '';
+      if (!audioUrl) throw new Error('no-upload-url');
+      const createRes = await fetch('https://api.assemblyai.com/v2/transcript', {
+        method: 'POST',
+        headers: { Authorization: apiKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ audio_url: audioUrl }),
+      });
+      if (!createRes.ok) throw new Error('create-failed');
+      const createJson = await createRes.json();
+      const id: string = createJson?.id ?? '';
+      if (!id) throw new Error('no-id');
+      const started = Date.now();
+      while (Date.now() - started < 60000) {
+        await new Promise(r => setTimeout(r, 1500));
+        const poll = await fetch(`https://api.assemblyai.com/v2/transcript/${id}`, { headers: { Authorization: apiKey } });
+        const pjson = await poll.json();
+        const status: string = pjson?.status ?? '';
+        console.log('[Coach][AAI] poll status', status);
+        if (status === 'completed') return (pjson?.text as string) || '';
+        if (status === 'error') throw new Error(pjson?.error || 'transcription-error');
+      }
+      throw new Error('timeout');
+    } catch (e) {
+      console.log('[Coach][AAI] transcribe error', e);
+      throw e;
+    }
+  }, []);
+
+  const transcribeMobileWithAssembly = useCallback(async (apiKey: string, fileUri: string): Promise<string> => {
+    try {
+      console.log('[Coach][AAI] Mobile upload', fileUri);
+      const result = await FileSystem.uploadAsync('https://api.assemblyai.com/v2/upload', fileUri, {
+        httpMethod: 'POST',
+        headers: { Authorization: apiKey },
+        uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
+      });
+      if (result.status < 200 || result.status >= 300) {
+        console.log('[Coach][AAI] uploadAsync failed', result.status, result.body?.slice(0, 200));
+        throw new Error('upload-failed');
+      }
+      const uploadJson = JSON.parse(result.body || '{}');
+      const audioUrl: string = uploadJson?.upload_url ?? uploadJson?.url ?? '';
+      if (!audioUrl) throw new Error('no-upload-url');
+      const createRes = await fetch('https://api.assemblyai.com/v2/transcript', {
+        method: 'POST',
+        headers: { Authorization: apiKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ audio_url: audioUrl }),
+      });
+      if (!createRes.ok) throw new Error('create-failed');
+      const createJson = await createRes.json();
+      const id: string = createJson?.id ?? '';
+      if (!id) throw new Error('no-id');
+      const started = Date.now();
+      while (Date.now() - started < 60000) {
+        await new Promise(r => setTimeout(r, 1500));
+        const poll = await fetch(`https://api.assemblyai.com/v2/transcript/${id}`, { headers: { Authorization: apiKey } });
+        const pjson = await poll.json();
+        const status: string = pjson?.status ?? '';
+        console.log('[Coach][AAI] poll status', status);
+        if (status === 'completed') return (pjson?.text as string) || '';
+        if (status === 'error') throw new Error(pjson?.error || 'transcription-error');
+      }
+      throw new Error('timeout');
+    } catch (e) {
+      console.log('[Coach][AAI] mobile transcribe error', e);
+      throw e;
+    }
+  }, []);
+
   const startWakeDetectionMobile = useCallback(async () => {
     try {
       if (Platform.OS === 'web') return;
@@ -433,6 +518,7 @@ function PhoenixCoach() {
     } catch (e) { console.log('[Coach] startSpeechCaptureMobile error', e); setIsListening(false); closeListeningModal(); }
   }, []);
 
+
   const aiChat = trpc.ai.chat.useMutation();
 
   const handleVoiceQuery = async (transcript: string) => {
@@ -494,6 +580,68 @@ function PhoenixCoach() {
       stopTypingAnimation(); 
     }
   };
+
+  const handleManualMic = useCallback(async () => {
+    try {
+      if ((assemblyAiApiKey ?? '').trim().length === 0) {
+        Alert.alert('Voice', 'Enter your AssemblyAI API key in Settings to use STT. Falling back to device STT.');
+        if (Platform.OS === 'web') startSpeechCaptureWeb(); else void startSpeechCaptureMobile();
+        return;
+      }
+      const key = (assemblyAiApiKey ?? '').trim();
+      if (Platform.OS === 'web') {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const recorder = new MediaRecorder(stream);
+        const chunks: Blob[] = [];
+        recorder.ondataavailable = e => { if (e.data?.size) chunks.push(e.data); };
+        recorder.onstop = async () => {
+          try {
+            stream.getTracks().forEach(t => t.stop());
+            const blob = new Blob(chunks, { type: 'audio/webm' });
+            const text = await uploadToAssemblyAIAndTranscribe(key, blob);
+            if (!text) throw new Error('no-text');
+            await handleVoiceQuery(text);
+          } catch (e) {
+            console.log('[Coach] web AAI mic error', e);
+            Alert.alert('STT Error', 'Failed to transcribe. Check API key.');
+          } finally {
+            setIsListening(false);
+          }
+        };
+        recorder.start();
+        setIsListening(true);
+        setTimeout(() => { try { recorder.stop(); } catch {} }, 6000);
+      } else {
+        const perm = await Audio.requestPermissionsAsync();
+        if (!perm.granted) { Alert.alert('Grant mic access'); return; }
+        await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
+        const rec = new Audio.Recording();
+        try { await rec.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY as any); } catch {}
+        await rec.startAsync();
+        setIsListening(true);
+        setTimeout(async () => {
+          try { await rec.stopAndUnloadAsync(); } catch {}
+          setIsListening(false);
+          const uri = rec.getURI();
+          if (!uri) return;
+          try {
+            const text = await transcribeMobileWithAssembly(key, uri);
+            if (!text) throw new Error('no-text');
+            await handleVoiceQuery(text);
+          } catch (e) {
+            console.log('[Coach] mobile AAI mic error', e);
+            Alert.alert('STT Error', 'Transcription failed. Invalid API key?');
+          } finally {
+            try { await Audio.setAudioModeAsync({ allowsRecordingIOS: false }); } catch {}
+          }
+        }, 6000);
+      }
+    } catch (e) {
+      console.log('[Coach] handleManualMic error', e);
+      Alert.alert('STT Error', 'Could not access microphone.');
+      setIsListening(false);
+    }
+  }, [assemblyAiApiKey, startSpeechCaptureWeb, startSpeechCaptureMobile, uploadToAssemblyAIAndTranscribe, transcribeMobileWithAssembly, handleVoiceQuery]);
 
   useEffect(() => {
     if (!wakeWordEnabled) return;
@@ -622,7 +770,7 @@ function PhoenixCoach() {
             blurOnSubmit={false}
           />
           <TouchableOpacity testID="coach-mic" style={[styles.voiceButton, { backgroundColor: isListening ? theme.primary : 'rgba(255,255,255,0.1)', borderColor: theme.primary }]} onPress={() => {
-            if (Platform.OS === 'web') startSpeechCaptureWeb(); else void startSpeechCaptureMobile();
+            void handleManualMic();
           }}>
             {isListening ? (
               <View style={styles.listeningIndicator}>

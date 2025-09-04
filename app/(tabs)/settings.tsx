@@ -139,6 +139,7 @@ function SettingsScreen() {
     loadRecordedSamples();
     loadClonedVoiceId();
     setElevenLabsApiKeyLocal(elevenLabsApiKey || '');
+    setAssemblyAiApiKeyLocal(assemblyAiApiKey || '');
     (async () => {
       try {
         const stored = await AsyncStorage.getItem('@phoenix_cloned_voice_path');
@@ -292,6 +293,7 @@ function SettingsScreen() {
   const loadApiKey = async () => {
     try {
       setElevenLabsApiKeyLocal(elevenLabsApiKey || '');
+      setAssemblyAiApiKeyLocal(assemblyAiApiKey || '');
     } catch (error) {
       console.error('Error loading API key:', error);
     }

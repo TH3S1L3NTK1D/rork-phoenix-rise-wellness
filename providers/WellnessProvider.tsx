@@ -236,6 +236,7 @@ interface WellnessData {
   lastVisualizationDate?: Date;
   meditation: MeditationData;
   elevenLabsApiKey?: string;
+  assemblyAiApiKey?: string;
   wakeWordEnabled?: boolean;
   soundEffectsEnabled?: boolean;
   backgroundMusicEnabled?: boolean;
@@ -417,6 +418,7 @@ function isWellnessData(val: unknown): val is WellnessData {
 const STORAGE_KEY = "@phoenix_wellness_data";
 const VOICE_PATH_KEY = "@phoenix_cloned_voice_path";
 const ELEVEN_KEY = "@phoenix_elevenlabs_api_key";
+const ASSEMBLY_KEY = "@phoenix_assemblyai_api_key";
 const WAKE_WORD_KEY = "@phoenix_wake_word_enabled";
 const SFX_KEY = "@phoenix_voice_sfx_enabled";
 const BGM_KEY = "@phoenix_voice_bgm_enabled";
@@ -510,6 +512,7 @@ export const [WellnessProvider, useWellness] = createContextHook(() => {
 
   const [isLoading, setIsLoading] = useState(true);
   const [elevenLabsApiKey, setElevenKeyState] = useState<string>("");
+  const [assemblyAiApiKey, setAssemblyKeyState] = useState<string>("");
   const [wakeWordEnabled, setWakeWordEnabledState] = useState<boolean>(true);
   const [soundEffectsEnabled, setSfxEnabled] = useState<boolean>(true);
   const [backgroundMusicEnabled, setBgmEnabled] = useState<boolean>(true);
@@ -535,6 +538,10 @@ export const [WellnessProvider, useWellness] = createContextHook(() => {
         if (key && key.trim().length > 0) {
           setElevenKeyState(key);
         }
+        const aaiWeb = Platform.OS === 'web' && typeof window !== 'undefined' ? window.localStorage.getItem(ASSEMBLY_KEY) : null;
+        if (aaiWeb) setAssemblyKeyState(aaiWeb);
+        const aaiKey = await AsyncStorage.getItem(ASSEMBLY_KEY);
+        if (aaiKey && aaiKey.trim().length > 0) setAssemblyKeyState(aaiKey);
       } catch (e) {
         console.warn('[WellnessProvider] Failed to load ElevenLabs key', e);
       }
@@ -794,24 +801,30 @@ export const [WellnessProvider, useWellness] = createContextHook(() => {
     };
   }, [data, isLoading, scheduleSave]);
 
-  // Keep ElevenLabs key persisted separately too
+  // Keep API keys persisted separately too
   useEffect(() => {
     (async () => {
       try {
         await AsyncStorage.setItem(ELEVEN_KEY, elevenLabsApiKey ?? "");
+        await AsyncStorage.setItem(ASSEMBLY_KEY, assemblyAiApiKey ?? "");
         if (Platform.OS === 'web' && typeof window !== 'undefined') {
           if (elevenLabsApiKey && elevenLabsApiKey.trim().length > 0) {
             window.localStorage.setItem(ELEVEN_KEY, elevenLabsApiKey);
           } else {
             window.localStorage.removeItem(ELEVEN_KEY);
           }
+          if (assemblyAiApiKey && assemblyAiApiKey.trim().length > 0) {
+            window.localStorage.setItem(ASSEMBLY_KEY, assemblyAiApiKey);
+          } else {
+            window.localStorage.removeItem(ASSEMBLY_KEY);
+          }
         }
-        console.log('[WellnessProvider] ElevenLabs key persisted length:', (elevenLabsApiKey ?? '').length);
+        console.log('[WellnessProvider] Keys persisted', { elevenLen: (elevenLabsApiKey ?? '').length, assemblyLen: (assemblyAiApiKey ?? '').length });
       } catch (e) {
         console.warn('[WellnessProvider] Persist key failed', e);
       }
     })();
-  }, [elevenLabsApiKey]);
+  }, [elevenLabsApiKey, assemblyAiApiKey]);
 
   // Persist voice settings separately (with web fallback)
   useEffect(() => {
@@ -1471,6 +1484,17 @@ export const [WellnessProvider, useWellness] = createContextHook(() => {
     }
   }, []);
 
+  const updateAssemblyAiApiKey = useCallback((key: string) => {
+    try {
+      const sanitized = (key ?? '').trim();
+      setAssemblyKeyState(sanitized);
+      setData((prev) => ({ ...prev, assemblyAiApiKey: sanitized }));
+      console.log('[WellnessProvider] updateAssemblyAiApiKey set length:', sanitized.length);
+    } catch (e) {
+      console.error('[WellnessProvider] updateAssemblyAiApiKey error', e);
+    }
+  }, []);
+
   const updateWakeWordEnabled = useCallback((enabled: boolean) => {
     try {
       setWakeWordEnabledState(enabled);
@@ -1566,6 +1590,7 @@ export const [WellnessProvider, useWellness] = createContextHook(() => {
     dreamLifeScript: data.dreamLifeScript,
     visualizationStreak: data.visualizationStreak,
     elevenLabsApiKey: data.elevenLabsApiKey ?? elevenLabsApiKey,
+    assemblyAiApiKey: data.assemblyAiApiKey ?? assemblyAiApiKey,
     wakeWordEnabled: data.wakeWordEnabled ?? wakeWordEnabled,
     soundEffectsEnabled: data.soundEffectsEnabled ?? soundEffectsEnabled,
     backgroundMusicEnabled: data.backgroundMusicEnabled ?? backgroundMusicEnabled,
@@ -1576,6 +1601,7 @@ export const [WellnessProvider, useWellness] = createContextHook(() => {
     
     // Updaters
     updateElevenLabsApiKey,
+    updateAssemblyAiApiKey,
     updateWakeWordEnabled,
     updateSoundEffectsEnabled,
     updateBackgroundMusicEnabled,
@@ -1707,7 +1733,9 @@ export const [WellnessProvider, useWellness] = createContextHook(() => {
     data.visualizationStreak,
     data.elevenLabsApiKey,
     elevenLabsApiKey,
+    assemblyAiApiKey,
     updateElevenLabsApiKey,
+    updateAssemblyAiApiKey,
     data.wakeWordEnabled,
     wakeWordEnabled,
     updateWakeWordEnabled,
