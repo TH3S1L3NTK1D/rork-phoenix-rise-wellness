@@ -216,17 +216,31 @@ function PhoenixCoach() {
   const sendMessage = async (text?: string) => {
     const messageText = (text ?? inputText ?? '').trim();
     if (!messageText) return;
+    console.log('[Coach] sendMessage ->', messageText);
     addChatMessage({ text: messageText, isUser: true });
     setInputText('');
     inputRef.current?.clear();
     inputRef.current?.focus();
     startTypingAnimation();
-    setTimeout(() => {
-      const response = generateSmartResponse(messageText);
-      addChatMessage({ text: response.text, isUser: false, quickActions: response.quickActions, emotion: response.emotion, visualEmoji: response.visualEmoji, messageColor: response.messageColor });
-      setTimeout(() => { void speakCoachMessage(response.text); }, 300);
+    try {
+      const { completion } = await aiChat.mutateAsync({
+        messages: [
+          { role: 'system', content: 'You are Anuna, a concise motivational wellness coach.' },
+          { role: 'user', content: messageText },
+        ] as any,
+      });
+      const reply = (completion as string) || generateSmartResponse(messageText).text;
+      const e = detectEmotion(reply);
+      addChatMessage({ text: reply, isUser: false, quickActions: ['Set Mini Goal'], emotion: e.emotion, visualEmoji: e.emoji, messageColor: e.color });
+      setTimeout(() => { void speakCoachMessage(reply); }, 200);
+    } catch (err) {
+      console.log('[Coach] sendMessage error', err);
+      const fallback = 'Anuna is thinking...';
+      const e = detectEmotion(fallback);
+      addChatMessage({ text: fallback, isUser: false, quickActions: [], emotion: e.emotion, visualEmoji: e.emoji, messageColor: e.color });
+    } finally {
       stopTypingAnimation();
-    }, 800 + Math.random() * 800);
+    }
   };
 
   const handleClearChat = () => {
@@ -445,7 +459,16 @@ function PhoenixCoach() {
           <View style={styles.messageContent}>
             <Text style={[styles.messageText, { color: theme.text }]}>{message.text}</Text>
             {!isUser && (
-              <TouchableOpacity testID="speak-msg" style={[styles.speakButton, isSpeaking && styles.speakButtonActive]} onPress={() => isSpeaking ? speechSynthesis.cancel() : speakCoachMessage(message.text)}>
+              <TouchableOpacity testID="speak-msg" style={[styles.speakButton, isSpeaking && styles.speakButtonActive]} onPress={() => {
+                if (isSpeaking) {
+                  if (Platform.OS === 'web' && typeof window !== 'undefined' && 'speechSynthesis' in window) {
+                    try { window.speechSynthesis.cancel(); } catch (e) { console.log('[Coach] speech cancel error', e); }
+                  }
+                  setIsSpeaking(false);
+                } else {
+                  void speakCoachMessage(message.text);
+                }
+              }}>
                 {isSpeaking ? <VolumeX size={16} color={theme.primary} /> : <Volume2 size={16} color={theme.primary} />}
               </TouchableOpacity>
             )}
