@@ -142,7 +142,7 @@ const CustomTabBar = memo(function CustomTabBar({ state }: any) {
 
   const navigateToRoute = useCallback(async (routeName: TabRouteKey) => {
     try {
-      router.replace(TABS_ROUTES[routeName]);
+      router.replace(TABS_ROUTES[routeName] as any);
       setOpenPanel(null);
       if (Platform.OS !== "web") {
         requestAnimationFrame(async () => {
@@ -260,15 +260,15 @@ const CustomTabBar = memo(function CustomTabBar({ state }: any) {
       <LinearGradient colors={["#1A2B3C", "#003366"]} style={styles.tabBar}>
         <TabBarItem
           testID="tab-home"
-          active={currentRoute === "index"}
+          active={currentRoute === "home"}
           label="Home"
-          icon={<Home size={28} color={currentRoute === "index" ? "#FF4500" : "#8aa"} />}
+          icon={<Home size={28} color={currentRoute === "home" ? "#FF4500" : "#8aa"} />}
           onPressIn={useCallback(() => {
             console.log("[Tab] home pressIn");
-            if (Platform.OS === 'android') navigateToRoute("index");
+            if (Platform.OS === 'android') navigateToRoute("home");
           }, [navigateToRoute])}
           onPress={useCallback(() => {
-            if (Platform.OS !== 'android') navigateToRoute("index");
+            if (Platform.OS !== 'android') navigateToRoute("home");
           }, [navigateToRoute])}
         />
 
@@ -508,18 +508,18 @@ const styles = StyleSheet.create({
   },
 });
 
-export const unstable_settings = { initialRouteName: 'index' };
+export const unstable_settings = { initialRouteName: 'home' };
 
 export default function TabLayout() {
   return (
     <Tabs
-      initialRouteName="index"
+      initialRouteName="home"
       tabBar={(props) => <CustomTabBar {...props} />}
       screenOptions={{
         headerShown: false,
       }}
     >
-      <Tabs.Screen name="index" />
+      <Tabs.Screen name="home" />
       <Tabs.Screen name="meal-prep" />
       <Tabs.Screen name="addiction" />
       <Tabs.Screen name="supplements" />

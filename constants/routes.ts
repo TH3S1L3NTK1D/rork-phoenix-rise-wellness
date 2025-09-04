@@ -10,6 +10,7 @@ const path = (slug?: string) => {
 
 export const TABS_ROUTES = {
   index: path(),
+  home: path('home'),
   'meal-prep': path('meal-prep'),
   addiction: path('addiction'),
   supplements: path('supplements'),

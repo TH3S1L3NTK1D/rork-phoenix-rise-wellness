@@ -446,8 +446,10 @@ export default function RootLayout() {
       initializePWA().catch(error => {
         console.error('[Phoenix Rise] PWA initialization failed:', error);
       });
-      window.addEventListener('online', () => onlineManager.setOnline(true));
-      window.addEventListener('offline', () => onlineManager.setOnline(false));
+      const onOnline = () => onlineManager.setOnline(true);
+      const onOffline = () => onlineManager.setOnline(false);
+      window.addEventListener('online', onOnline);
+      window.addEventListener('offline', onOffline);
     }
 
     const globalHandler = (global as any)?.ErrorUtils?.getGlobalHandler?.();
@@ -461,8 +463,11 @@ export default function RootLayout() {
         document.removeEventListener('visibilitychange', sub);
       }
       if (Platform.OS === 'web') {
-        window.removeEventListener('online', () => onlineManager.setOnline(true));
-        window.removeEventListener('offline', () => onlineManager.setOnline(false));
+        // remove with references defined above
+        const onOnline = () => onlineManager.setOnline(true);
+        const onOffline = () => onlineManager.setOnline(false);
+        window.removeEventListener('online', onOnline);
+        window.removeEventListener('offline', onOffline);
       }
     };
   }, [initializePWA, clearWebCaches]);
