@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import type { Href } from 'expo-router';
 
 const TABS_PREFIX = Platform.OS === 'web' ? '' : '/(tabs)';
 const path = (slug?: string) => {
@@ -25,3 +26,5 @@ export const TABS_ROUTES = {
 } as const;
 
 export type TabRouteKey = keyof typeof TABS_ROUTES;
+
+export const getHref = (key: TabRouteKey): Href => TABS_ROUTES[key] as unknown as Href;

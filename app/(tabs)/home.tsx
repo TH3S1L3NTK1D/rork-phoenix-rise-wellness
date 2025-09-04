@@ -16,7 +16,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Flame, Target, Utensils, Pill, Shield } from "lucide-react-native";
 import { useWellness } from "@/providers/WellnessProvider";
 import { useRouter } from "expo-router";
-import { TABS_ROUTES, TabRouteKey } from "@/constants/routes";
+import { TABS_ROUTES, TabRouteKey, getHref } from "@/constants/routes";
 import * as Haptics from "expo-haptics";
 
 const { width } = Dimensions.get('window');
@@ -69,7 +69,7 @@ function DashboardScreenInner() {
 
   const navigateWithHaptics = React.useCallback(async (route: TabRouteKey) => {
     try {
-      router.replace(TABS_ROUTES[route]);
+      router.replace(getHref(route));
       if (Platform.OS !== "web") {
         requestAnimationFrame(async () => {
           try {
