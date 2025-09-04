@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Send, Flame, RotateCcw, Volume2, VolumeX, Mic } from 'lucide-react-native';
 import { useWellness } from '@/providers/WellnessProvider';
+import { trpc } from '@/lib/trpc';
 import { Audio } from 'expo-av';
 
 interface SmartResponse {
@@ -48,7 +49,23 @@ function PhoenixCoach() {
   const recognitionRef = useRef<any>(null);
   const currentUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
 
-  const [anunaVoiceId, setAnunaVoiceId] = useState<string>(ANUNA_DEFAULT_VOICE_ID);
+  // Using default Anuna voice id; settings can override globally when available
+  const [voiceId, setVoiceId] = useState<string>(ANUNA_DEFAULT_VOICE_ID);
+  useEffect(() => {
+    (async () => {
+      try {
+        const { default: AsyncStorage } = await import('@react-native-async-storage/async-storage');
+        const saved = await AsyncStorage.getItem('@phoenix_anuna_voice_id');
+        if (saved && saved.trim().length > 0) setVoiceId(saved.trim());
+      } catch {}
+      try {
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+          const ls = window.localStorage.getItem('@phoenix_anuna_voice_id');
+          if (ls && ls.trim().length > 0) setVoiceId(ls.trim());
+        }
+      } catch {}
+    })();
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -64,23 +81,7 @@ function PhoenixCoach() {
     })();
   }, []);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        if (Platform.OS === 'web' && typeof window !== 'undefined') {
-          const stored = window.localStorage.getItem('@phoenix_anuna_voice_id');
-          if (stored && stored.trim().length > 0) setAnunaVoiceId(stored.trim());
-        } else {
-          // @ts-ignore AsyncStorage available via native module in this app (persisted by Settings)
-          const { default: AsyncStorage } = await import('@react-native-async-storage/async-storage');
-          const id = await AsyncStorage.getItem('@phoenix_anuna_voice_id');
-          if (id && id.trim().length > 0) setAnunaVoiceId(id.trim());
-        }
-      } catch (e) {
-        console.log('[Coach] load voice id error', e);
-      }
-    })();
-  }, []);
+
 
   const getTimeOfDay = () => {
     const hour = new Date().getHours();
@@ -165,7 +166,7 @@ function PhoenixCoach() {
         speakWithBrowser(text);
         return;
       }
-      const endpoint = `https://api.elevenlabs.io/v1/text-to-speech/${anunaVoiceId}`;
+      const endpoint = `https://api.elevenlabs.io/v1/text-to-speech/${voiceId || ANUNA_DEFAULT_VOICE_ID}`;
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'xi-api-key': key, 'Content-Type': 'application/json', 'Accept': 'audio/mpeg' },
@@ -391,19 +392,15 @@ function PhoenixCoach() {
     } catch (e) { console.log('[Coach] startSpeechCaptureMobile error', e); setIsListening(false); closeListeningModal(); }
   }, []);
 
+  const aiChat = trpc.ai.chat.useMutation();
+
   const handleVoiceQuery = async (transcript: string) => {
     try {
       if (!transcript || !transcript.trim()) return;
       addChatMessage({ text: transcript.trim(), isUser: true });
       startTypingAnimation();
-      const res = await fetch('https://toolkit.rork.com/text/llm/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: [ { role: 'system', content: 'You are Anuna, a concise motivational wellness coach.' }, { role: 'user', content: transcript.trim() } ] }),
-      });
-      const json = await res.json();
-      const completion: string = json?.completion ?? '';
-      const reply = completion || generateSmartResponse(transcript).text;
+      const { completion } = await aiChat.mutateAsync({ messages: [ { role: 'system', content: 'You are Anuna, a concise motivational wellness coach.' }, { role: 'user', content: transcript.trim() } ] as any });
+      const reply = (completion as string) || generateSmartResponse(transcript).text;
       const e = detectEmotion(reply);
       addChatMessage({ text: reply, isUser: false, quickActions: ['Set Mini Goal'], emotion: e.emotion, visualEmoji: e.emoji, messageColor: e.color });
       setTimeout(() => { void speakCoachMessage(reply); }, 200);

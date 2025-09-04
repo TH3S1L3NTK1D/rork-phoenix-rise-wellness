@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import createContextHook from "@nkzw/create-context-hook";
-import { Platform, InteractionManager } from "react-native";
+import { Platform, InteractionManager, Alert, AppState, AppStateStatus } from "react-native";
+import { Audio } from 'expo-av';
 
 interface Meal {
   id: string;
@@ -725,6 +726,44 @@ export const [WellnessProvider, useWellness] = createContextHook(() => {
   // Load data from AsyncStorage
   useEffect(() => {
     loadData();
+  }, []);
+
+  // Ensure wake word default and request mic early
+  useEffect(() => {
+    (async () => {
+      try {
+        let stored = await AsyncStorage.getItem(WAKE_WORD_KEY);
+        if (stored === null) {
+          setWakeWordEnabledState(true);
+          await AsyncStorage.setItem(WAKE_WORD_KEY, 'true');
+          if (Platform.OS === 'web' && typeof window !== 'undefined') {
+            window.localStorage.setItem(WAKE_WORD_KEY, 'true');
+          }
+        }
+        if (Platform.OS !== 'web') {
+          const perm = await Audio.requestPermissionsAsync();
+          console.log('[WellnessProvider] Mic permission', perm);
+          if (!perm.granted) {
+            Alert.alert('Mic access needed');
+          }
+        }
+      } catch (e) {
+        console.warn('[WellnessProvider] wake init failed', e);
+      }
+    })();
+
+    const sub = AppState.addEventListener('change', (s: AppStateStatus) => {
+      if (s === 'active') {
+        try {
+          if (Platform.OS === 'web' && typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('phoenix:wake-check'));
+          }
+        } catch (e) {
+          console.log('[WellnessProvider] AppState wake-check error', e);
+        }
+      }
+    });
+    return () => { try { sub.remove(); } catch {} };
   }, []);
 
   // Apply theme to web
