@@ -31,7 +31,7 @@ interface UserProfile {
 const PROFILE_STORAGE_KEY = "@phoenix_user_profile";
 
 function SettingsScreen() {
-  const { phoenixPoints, meals, extendedMeals, goals, journalEntries, supplements, addictions, currentTheme, updateTheme, resetToPhoenixTheme, elevenLabsApiKey, updateElevenLabsApiKey, wakeWordEnabled, updateWakeWordEnabled, soundEffectsEnabled, backgroundMusicEnabled, autoReadResponsesEnabled, voiceModeEnabled, emotionalIntelligenceEnabled, ttsSpeed, updateSoundEffectsEnabled, updateBackgroundMusicEnabled, updateAutoReadResponsesEnabled, updateVoiceModeEnabled, updateEmotionalIntelligenceEnabled, updateTtsSpeed } = useWellness();
+  const { phoenixPoints, meals, extendedMeals, goals, journalEntries, supplements, addictions, currentTheme, updateTheme, resetToPhoenixTheme, elevenLabsApiKey, updateElevenLabsApiKey, assemblyAiApiKey, updateAssemblyAiApiKey, wakeWordEnabled, updateWakeWordEnabled, soundEffectsEnabled, backgroundMusicEnabled, autoReadResponsesEnabled, voiceModeEnabled, emotionalIntelligenceEnabled, ttsSpeed, updateSoundEffectsEnabled, updateBackgroundMusicEnabled, updateAutoReadResponsesEnabled, updateVoiceModeEnabled, updateEmotionalIntelligenceEnabled, updateTtsSpeed } = useWellness();
   const [clonedVoicePath, setClonedVoicePath] = useState<string>("");
   const [activeTab, setActiveTab] = useState<"profile" | "data" | "theme" | "voice">("profile");
   const [profile, setProfile] = useState<UserProfile>({
@@ -84,6 +84,7 @@ function SettingsScreen() {
   const wakeRecognitionRef = useRef<any>(null);
   const [playingSampleIndex, setPlayingSampleIndex] = useState<number | null>(null);
   const [elevenLabsApiKeyLocal, setElevenLabsApiKeyLocal] = useState<string>('');
+  const [assemblyAiApiKeyLocal, setAssemblyAiApiKeyLocal] = useState<string>('');
   const [voicePersonality, setVoicePersonality] = useState<string>('motivator');
   const [tempApiKey, setTempApiKey] = useState<string>('');
 
