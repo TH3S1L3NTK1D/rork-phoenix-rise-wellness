@@ -7,6 +7,8 @@ import { useWellness } from '@/providers/WellnessProvider';
 import { trpc } from '@/lib/trpc';
 import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
+import { useRouter } from 'expo-router';
+import { getHref } from '@/constants/routes';
 
 
 interface SmartResponse {
@@ -20,6 +22,7 @@ interface SmartResponse {
 const ANUNA_DEFAULT_VOICE_ID = 'ahvd0TWxmVC87GTyJn2P' as const;
 
 function PhoenixCoach() {
+  const router = useRouter();
   const {
     chatMessages,
     addChatMessage,
@@ -37,6 +40,9 @@ function PhoenixCoach() {
     wakeWordEnabled,
     ttsSpeed,
     openWeatherApiKey,
+    addAddiction,
+    addMeal,
+    addGoal,
   } = useWellness();
 
   const theme = currentTheme.colors;
@@ -46,6 +52,9 @@ function PhoenixCoach() {
   const [isTyping, setIsTyping] = useState<boolean>(false);
   const [isListening, setIsListening] = useState<boolean>(false);
   const [isSpeaking, setIsSpeaking] = useState<boolean>(false);
+  type IntentKind = 'add_addiction' | 'set_goal' | 'log_meal';
+  type PendingIntent = { kind: IntentKind; step: number; data: Record<string, any> } | null;
+  const [pendingIntent, setPendingIntent] = useState<PendingIntent>(null);
   const typingAnimation = useRef(new Animated.Value(0)).current;
   const soundWaveAnimations = useRef(Array.from({ length: 5 }, () => new Animated.Value(0))).current;
 
@@ -217,6 +226,19 @@ function PhoenixCoach() {
     try { await speakWithAPI(text); } catch (e) { console.log('speakCoachMessage error', e); }
   };
 
+  const confirmAndSpeak = useCallback((text: string) => {
+    const e = detectEmotion(text);
+    addChatMessage({ 
+      text,
+      isUser: false,
+      quickActions: [],
+      emotion: e.emotion,
+      visualEmoji: e.emoji,
+      messageColor: e.color,
+    });
+    setTimeout(() => { void speakCoachMessage(text); }, 150);
+  }, [addChatMessage]);
+
   const fetchWeather = useCallback(async (): Promise<string | null> => {
     try {
       const key = (openWeatherApiKey ?? '').trim();
@@ -271,16 +293,136 @@ function PhoenixCoach() {
     }
   }, []);
 
+  const handleIntentFlow = useCallback(async (raw: string): Promise<boolean> => {
+    try {
+      const text = (raw ?? '').trim();
+      if (!text) return false;
+      console.log('[Coach][Intent] incoming:', text, 'pending:', pendingIntent);
+
+      if (pendingIntent) {
+        if (pendingIntent.kind === 'add_addiction') {
+          const name = text.replace(/\./g, '').trim();
+          if (name.length < 2) { confirmAndSpeak('Please say the addiction name.'); return true; }
+          addAddiction(name);
+          setPendingIntent(null);
+          confirmAndSpeak(`Added addiction: ${name}. I am rooting for your streak.`);
+          return true;
+        }
+        if (pendingIntent.kind === 'log_meal') {
+          const lower = text.toLowerCase();
+          const typeMatch = /(breakfast|lunch|dinner|snack)/.exec(lower);
+          const type = (typeMatch ? (typeMatch[1] as 'breakfast'|'lunch'|'dinner'|'snack') : (pendingIntent.data.type as any)) as 'breakfast'|'lunch'|'dinner'|'snack' | undefined;
+          const caloriesMatch = /(\d{2,4})\s*cal(ories)?/i.exec(text);
+          const calories = caloriesMatch ? Number(caloriesMatch[1]) : (typeof pendingIntent.data.calories === 'number' ? pendingIntent.data.calories : 0);
+          const name = pendingIntent.data.name ? String(pendingIntent.data.name) : (text.replace(/\b(breakfast|lunch|dinner|snack)\b/i, '').replace(/\d{2,4}\s*cal(ories)?/i, '').trim());
+          if (!type) { setPendingIntent({ kind: 'log_meal', step: 1, data: { ...pendingIntent.data, name } }); confirmAndSpeak('What meal type is it? Breakfast, lunch, dinner, or snack?'); return true; }
+          if (!name || name.length < 2) { setPendingIntent({ kind: 'log_meal', step: 2, data: { ...pendingIntent.data, type, calories } }); confirmAndSpeak('What did you have?'); return true; }
+          addMeal({ type, name, calories: Number.isFinite(calories) ? calories : 0, completed: true });
+          setPendingIntent(null);
+          confirmAndSpeak(`Logged ${type}: ${name}${calories ? `, ${calories} calories` : ''}. Well done.`);
+          return true;
+        }
+        if (pendingIntent.kind === 'set_goal') {
+          const title = text.trim();
+          const goal = {
+            title,
+            description: '',
+            category: 'personal' as const,
+            targetDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+            measurementMethod: '',
+            priority: 'medium' as const,
+            milestones: [] as string[],
+            progress: 0,
+            completed: false,
+          };
+          addGoal(goal);
+          setPendingIntent(null);
+          try { router.push(getHref('goals')); } catch {}
+          confirmAndSpeak(`Goal created: ${title}. I opened your goals.`);
+          return true;
+        }
+        return false;
+      }
+
+      if (/\badd\s+addiction\b/i.test(text)) {
+        const nameMatch = text.match(/add\s+addiction\s+(?:called\s+)?(.+)/i);
+        if (nameMatch && nameMatch[1]?.trim()) {
+          const name = nameMatch[1].trim();
+          addAddiction(name);
+          confirmAndSpeak(`Added addiction: ${name}. Stay strong.`);
+          return true;
+        }
+        setPendingIntent({ kind: 'add_addiction', step: 1, data: {} });
+        confirmAndSpeak('What addiction?');
+        return true;
+      }
+
+      if (/\b(log|add)\s+meal\b/i.test(text) || /\bmeal\s+log\b/i.test(text)) {
+        const lower = text.toLowerCase();
+        const typeMatch = /(breakfast|lunch|dinner|snack)/.exec(lower);
+        const type = typeMatch ? (typeMatch[1] as 'breakfast'|'lunch'|'dinner'|'snack') : undefined;
+        const caloriesMatch = /(\d{2,4})\s*cal(ories)?/i.exec(text);
+        const calories = caloriesMatch ? Number(caloriesMatch[1]) : undefined;
+        const name = text.replace(/\b(log|add)\s+meal\b/i, '').replace(/\bmeal\s+log\b/i, '').replace(/\b(breakfast|lunch|dinner|snack)\b/i, '').replace(/\d{2,4}\s*cal(ories)?/i, '').trim();
+        if (type && name) {
+          addMeal({ type, name, calories: Number.isFinite(calories as any) ? (calories as number) : 0, completed: true });
+          confirmAndSpeak(`Logged ${type}: ${name}${calories ? `, ${calories} calories` : ''}.`);
+          return true;
+        }
+        setPendingIntent({ kind: 'log_meal', step: 0, data: { type, name, calories } });
+        if (!type) { confirmAndSpeak('What meal type is it? Breakfast, lunch, dinner, or snack?'); }
+        else if (!name) { confirmAndSpeak('What did you have?'); }
+        else { confirmAndSpeak('How many calories, approximately?'); }
+        return true;
+      }
+
+      if (/\bset\s+goal\b/i.test(text) || /\bcreate\s+goal\b/i.test(text)) {
+        const titleMatch = text.match(/(?:set|create)\s+goal\s+(?:to\s+)?(.+)/i);
+        if (titleMatch && titleMatch[1]?.trim()) {
+          const title = titleMatch[1].trim();
+          const goal = {
+            title,
+            description: '',
+            category: 'personal' as const,
+            targetDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+            measurementMethod: '',
+            priority: 'medium' as const,
+            milestones: [] as string[],
+            progress: 0,
+            completed: false,
+          };
+          addGoal(goal);
+          try { router.push(getHref('goals')); } catch {}
+          confirmAndSpeak(`Goal created: ${title}. I opened your goals.`);
+          return true;
+        }
+        setPendingIntent({ kind: 'set_goal', step: 1, data: {} });
+        confirmAndSpeak('What is the goal title?');
+        try { router.push(getHref('goals')); } catch {}
+        return true;
+      }
+
+      return false;
+    } catch (e) {
+      console.log('[Coach][Intent] error', e);
+      return false;
+    }
+  }, [pendingIntent, addAddiction, addMeal, addGoal, confirmAndSpeak, router]);
+
   const sendMessage = async (text?: string) => {
     const messageText = (text ?? inputText ?? '').trim();
     if (!messageText) return;
     console.log('[Coach] sendMessage ->', messageText);
     
-    // Add user message immediately
     addChatMessage({ text: messageText, isUser: true });
     setInputText('');
     inputRef.current?.clear();
     inputRef.current?.focus();
+
+    if (await handleIntentFlow(messageText)) {
+      return;
+    }
+
     startTypingAnimation();
     
     try {
@@ -318,7 +460,6 @@ function PhoenixCoach() {
       }
     } catch (err) {
       console.log('[Coach] sendMessage error', err);
-      const fallback = 'I\'m having trouble connecting right now. Let me try to help you with what I know.';
       const smartResponse = generateSmartResponse(messageText);
       const e = detectEmotion(smartResponse.text);
       addChatMessage({ 
@@ -589,6 +730,11 @@ function PhoenixCoach() {
       console.log('[Coach] Voice query:', transcript);
       
       addChatMessage({ text: transcript.trim(), isUser: true });
+
+      if (await handleIntentFlow(transcript)) {
+        return;
+      }
+
       startTypingAnimation();
       
       const voiceMessages: any[] = [ { role: 'system', content: 'You are Anuna, a concise motivational wellness coach. Provide unique, helpful responses.' } ];
