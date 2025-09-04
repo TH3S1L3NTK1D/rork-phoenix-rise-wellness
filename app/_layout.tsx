@@ -11,6 +11,7 @@ import { offlineStorage } from "@/utils/offlineStorage";
 import PWAInstallPrompt from "@/components/PWAInstallPrompt";
 import { trpc, trpcClient } from "@/lib/trpc";
 import { Audio } from 'expo-av';
+import { Mic } from 'lucide-react-native';
 
 const APP_VERSION = '1.0.3';
 SplashScreen.preventAutoHideAsync();
@@ -629,11 +630,29 @@ export default function RootLayout() {
               <RootLayoutNav />
               {Platform.OS === 'web' && <PWAInstallPrompt />}
               <GlobalVoiceAgent />
+              <HeaderMicIndicator />
             </WellnessProvider>
           </GestureHandlerRootView>
         </QueryClientProvider>
       </trpc.Provider>
     </ErrorBoundary>
+  );
+}
+
+function HeaderMicIndicator() {
+  const { wakeWordEnabled } = useWellness();
+  if (!wakeWordEnabled) return null as any;
+  return (
+    <View
+      testID="header-mic-indicator"
+      style={styles.headerMicWrap}
+      pointerEvents="none"
+    >
+      <View style={styles.headerMicPill}>
+        <Mic size={14} color="#FF4500" />
+        <Text style={styles.headerMicText}>listening</Text>
+      </View>
+    </View>
   );
 }
 
@@ -666,5 +685,28 @@ const styles = StyleSheet.create({
     right: 0,
     top: 0,
     bottom: 0,
+  },
+  headerMicWrap: {
+    position: 'absolute',
+    top: Platform.select({ ios: 14, android: 8, web: 8, default: 10 }) as number,
+    right: 12,
+    zIndex: 2000,
+  },
+  headerMicPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,69,0,0.35)',
+  },
+  headerMicText: {
+    color: '#FF4500',
+    fontSize: 12,
+    fontWeight: '700' as const,
+    marginLeft: 6,
+    opacity: 0.9,
   },
 });

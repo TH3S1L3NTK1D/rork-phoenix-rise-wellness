@@ -268,6 +268,9 @@ function PhoenixCoach() {
       const res = await fetch(url);
       if (!res.ok) {
         console.log('[Coach][Weather] API error', res.status);
+        if (res.status === 401 || res.status === 403) {
+          Alert.alert('Weather', 'Invalid OpenWeather API key');
+        }
         return null;
       }
       const json = await res.json();
