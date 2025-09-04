@@ -69,7 +69,7 @@ function DashboardScreenInner() {
 
   const navigateWithHaptics = React.useCallback(async (route: TabRouteKey) => {
     try {
-      router.replace(getHref(route));
+      router.replace(getHref(route) as any);
       if (Platform.OS !== "web") {
         requestAnimationFrame(async () => {
           try {

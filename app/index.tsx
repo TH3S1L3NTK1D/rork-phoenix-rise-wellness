@@ -3,5 +3,5 @@ import { Redirect } from 'expo-router';
 import { getHref } from '@/constants/routes';
 
 export default function RootIndex() {
-  return <Redirect href={getHref('goals')} />;
+  return <Redirect href={getHref('home')} />;
 }

@@ -217,27 +217,54 @@ function PhoenixCoach() {
     const messageText = (text ?? inputText ?? '').trim();
     if (!messageText) return;
     console.log('[Coach] sendMessage ->', messageText);
+    
+    // Add user message immediately
     addChatMessage({ text: messageText, isUser: true });
     setInputText('');
     inputRef.current?.clear();
     inputRef.current?.focus();
     startTypingAnimation();
+    
     try {
-      const { completion } = await aiChat.mutateAsync({
+      console.log('[Coach] Calling AI chat mutation...');
+      const result = await aiChat.mutateAsync({
         messages: [
-          { role: 'system', content: 'You are Anuna, a concise motivational wellness coach.' },
+          { role: 'system', content: 'You are Anuna, a concise motivational wellness coach. Provide unique, helpful responses.' },
           { role: 'user', content: messageText },
         ] as any,
       });
-      const reply = (completion as string) || generateSmartResponse(messageText).text;
-      const e = detectEmotion(reply);
-      addChatMessage({ text: reply, isUser: false, quickActions: ['Set Mini Goal'], emotion: e.emotion, visualEmoji: e.emoji, messageColor: e.color });
-      setTimeout(() => { void speakCoachMessage(reply); }, 200);
+      
+      console.log('[Coach] AI response received:', result);
+      const reply = (result?.completion as string)?.trim() || generateSmartResponse(messageText).text;
+      
+      if (reply && reply !== 'Anuna is thinking...') {
+        const e = detectEmotion(reply);
+        addChatMessage({ 
+          text: reply, 
+          isUser: false, 
+          quickActions: ['Set Mini Goal'], 
+          emotion: e.emotion, 
+          visualEmoji: e.emoji, 
+          messageColor: e.color 
+        });
+        setTimeout(() => { void speakCoachMessage(reply); }, 200);
+      } else {
+        throw new Error('Empty or invalid response');
+      }
     } catch (err) {
       console.log('[Coach] sendMessage error', err);
-      const fallback = 'Anuna is thinking...';
-      const e = detectEmotion(fallback);
-      addChatMessage({ text: fallback, isUser: false, quickActions: [], emotion: e.emotion, visualEmoji: e.emoji, messageColor: e.color });
+      const fallback = 'I\'m having trouble connecting right now. Let me try to help you with what I know.';
+      const smartResponse = generateSmartResponse(messageText);
+      const e = detectEmotion(smartResponse.text);
+      addChatMessage({ 
+        text: smartResponse.text, 
+        isUser: false, 
+        quickActions: smartResponse.quickActions || [], 
+        emotion: e.emotion, 
+        visualEmoji: e.emoji, 
+        messageColor: e.color 
+      });
+      setTimeout(() => { void speakCoachMessage(smartResponse.text); }, 200);
     } finally {
       stopTypingAnimation();
     }
@@ -411,17 +438,61 @@ function PhoenixCoach() {
   const handleVoiceQuery = async (transcript: string) => {
     try {
       if (!transcript || !transcript.trim()) return;
+      console.log('[Coach] Voice query:', transcript);
+      
       addChatMessage({ text: transcript.trim(), isUser: true });
       startTypingAnimation();
-      const { completion } = await aiChat.mutateAsync({ messages: [ { role: 'system', content: 'You are Anuna, a concise motivational wellness coach.' }, { role: 'user', content: transcript.trim() } ] as any });
-      const reply = (completion as string) || generateSmartResponse(transcript).text;
-      const e = detectEmotion(reply);
-      addChatMessage({ text: reply, isUser: false, quickActions: ['Set Mini Goal'], emotion: e.emotion, visualEmoji: e.emoji, messageColor: e.color });
-      setTimeout(() => { void speakCoachMessage(reply); }, 200);
+      
+      const result = await aiChat.mutateAsync({ 
+        messages: [ 
+          { role: 'system', content: 'You are Anuna, a concise motivational wellness coach. Provide unique, helpful responses.' }, 
+          { role: 'user', content: transcript.trim() } 
+        ] as any 
+      });
+      
+      console.log('[Coach] Voice AI response:', result);
+      const reply = (result?.completion as string)?.trim() || generateSmartResponse(transcript).text;
+      
+      if (reply && reply !== 'Anuna is thinking...') {
+        const e = detectEmotion(reply);
+        addChatMessage({ 
+          text: reply, 
+          isUser: false, 
+          quickActions: ['Set Mini Goal'], 
+          emotion: e.emotion, 
+          visualEmoji: e.emoji, 
+          messageColor: e.color 
+        });
+        setTimeout(() => { void speakCoachMessage(reply); }, 200);
+      } else {
+        const smartResponse = generateSmartResponse(transcript);
+        const e = detectEmotion(smartResponse.text);
+        addChatMessage({ 
+          text: smartResponse.text, 
+          isUser: false, 
+          quickActions: smartResponse.quickActions || [], 
+          emotion: e.emotion, 
+          visualEmoji: e.emoji, 
+          messageColor: e.color 
+        });
+        setTimeout(() => { void speakCoachMessage(smartResponse.text); }, 200);
+      }
     } catch (e) {
       console.log('[Coach] handleVoiceQuery error', e);
-      Alert.alert('Voice', 'Something went wrong. Please try again.');
-    } finally { stopTypingAnimation(); }
+      const smartResponse = generateSmartResponse(transcript);
+      const emotion = detectEmotion(smartResponse.text);
+      addChatMessage({ 
+        text: smartResponse.text, 
+        isUser: false, 
+        quickActions: smartResponse.quickActions || [], 
+        emotion: emotion.emotion, 
+        visualEmoji: emotion.emoji, 
+        messageColor: emotion.color 
+      });
+      setTimeout(() => { void speakCoachMessage(smartResponse.text); }, 200);
+    } finally { 
+      stopTypingAnimation(); 
+    }
   };
 
   useEffect(() => {
