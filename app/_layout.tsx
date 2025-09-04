@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider, focusManager, onlineManager } from "@
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect } from "react";
-import { Platform, View, Text, TouchableOpacity, DevSettings, ScrollView } from "react-native";
+import { Platform, View, Text, TouchableOpacity, DevSettings, ScrollView, Modal, ActivityIndicator, StyleSheet, Alert } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { WellnessProvider, useWellness } from "@/providers/WellnessProvider";
@@ -10,6 +10,7 @@ import { pwaManager } from "@/utils/pwa";
 import { offlineStorage } from "@/utils/offlineStorage";
 import PWAInstallPrompt from "@/components/PWAInstallPrompt";
 import { trpc, trpcClient } from "@/lib/trpc";
+import { Audio } from 'expo-av';
 
 const APP_VERSION = '1.0.3';
 SplashScreen.preventAutoHideAsync();
@@ -48,10 +49,13 @@ function RootLayoutNav() {
 const ANUNA_VOICE_ID = 'ahvd0TWxmVC87GTyJn2P' as const;
 
 const GlobalVoiceAgentInner = React.memo(function GlobalVoiceAgentInner() {
-  const { wakeWordEnabled, elevenLabsApiKey, addAddiction } = useWellness();
+  const { wakeWordEnabled, elevenLabsApiKey, assemblyAiApiKey, ttsSpeed } = useWellness();
   const wakeRecognizerRef = React.useRef<any>(null);
   const cmdRecognizerRef = React.useRef<any>(null);
   const isWeb = Platform.OS === 'web';
+  const [listeningModal, setListeningModal] = React.useState<boolean>(false);
+  const [busy, setBusy] = React.useState<boolean>(false);
+  const cancelledRef = React.useRef<boolean>(false);
 
   const speak = React.useCallback(async (text: string) => {
     try {
@@ -67,7 +71,9 @@ const GlobalVoiceAgentInner = React.memo(function GlobalVoiceAgentInner() {
           },
           body: JSON.stringify({
             text,
-            voice_settings: { stability: 0.5, similarity_boost: 0.75 },
+            voice_settings: { stability: 0.5, similarity_boost: 0.75, style: 0.2, use_speaker_boost: true },
+            model_id: 'eleven_multilingual_v2',
+            optimize_streaming_latency: 2,
           }),
         });
         if (res.ok) {
@@ -80,19 +86,63 @@ const GlobalVoiceAgentInner = React.memo(function GlobalVoiceAgentInner() {
         }
         console.warn('[GlobalVoiceAgent] ElevenLabs TTS failed', res.status);
       }
-      if (isWeb && 'speechSynthesis' in window) {
+      if (isWeb && typeof window !== 'undefined' && 'speechSynthesis' in window) {
         const u = new SpeechSynthesisUtterance(text);
-        u.rate = 1.0; u.pitch = 1.0; u.volume = 1.0;
+        u.rate = (ttsSpeed ?? 0.8) as number; u.pitch = 1.0; u.volume = 1.0;
         speechSynthesis.speak(u);
+        return;
+      }
+      if (Platform.OS !== 'web' && (elevenLabsApiKey ?? '').trim().length > 0) {
+        try {
+          const endpoint = `https://api.elevenlabs.io/v1/text-to-speech/${ANUNA_VOICE_ID}`;
+          const res = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+              'xi-api-key': (elevenLabsApiKey ?? '').trim(),
+              'Content-Type': 'application/json',
+              'Accept': 'audio/mpeg',
+            },
+            body: JSON.stringify({ text, voice_settings: { stability: 0.5, similarity_boost: 0.75 }, model_id: 'eleven_multilingual_v2' }),
+          });
+          if (res.ok) {
+            const arrayBuffer = await res.arrayBuffer();
+            const u8 = new Uint8Array(arrayBuffer);
+            let tmp = '';
+            for (let i = 0; i < u8.length; i++) tmp += String.fromCharCode(u8[i]);
+            const base64 = (global as any).btoa ? (global as any).btoa(tmp) : '';
+            const soundObject = new Audio.Sound();
+            await soundObject.loadAsync({ uri: `data:audio/mpeg;base64,${base64}` } as any);
+            await soundObject.playAsync();
+            return;
+          }
+        } catch (e) {
+          console.log('[GlobalVoiceAgent] native TTS play failed', e);
+        }
       }
     } catch (e) {
       console.log('[GlobalVoiceAgent] speak error', e);
-      if (isWeb && 'speechSynthesis' in window) {
+      if (isWeb && typeof window !== 'undefined' && 'speechSynthesis' in window) {
         const u = new SpeechSynthesisUtterance(text);
+        u.rate = (ttsSpeed ?? 0.8) as number;
         speechSynthesis.speak(u);
       }
     }
-  }, [elevenLabsApiKey, isWeb]);
+  }, [elevenLabsApiKey, isWeb, ttsSpeed]);
+
+  const chatMutation = trpc.ai.chat.useMutation();
+
+  const processChat = React.useCallback(async (text: string) => {
+    try {
+      console.log('[GlobalVoiceAgent] Sending chat:', text);
+      const res = await chatMutation.mutateAsync({ messages: [{ role: 'user', content: text }] as any });
+      const completion: string = (res as any)?.completion ?? '';
+      const reply = completion && completion.length > 0 ? completion : 'Anuna is thinking...';
+      await speak(reply);
+    } catch (e) {
+      console.log('[GlobalVoiceAgent] chat error', e);
+      await speak('Anuna is thinking...');
+    }
+  }, [chatMutation, speak]);
 
   const dispatchFocusCoach = React.useCallback(() => {
     try {
@@ -104,44 +154,7 @@ const GlobalVoiceAgentInner = React.memo(function GlobalVoiceAgentInner() {
     }
   }, [isWeb]);
 
-  const parseAndExecute = React.useCallback(async (raw: string) => {
-    try {
-      const text = (raw ?? '').toLowerCase();
-      console.log('[GlobalVoiceAgent] Command heard:', text);
-
-      const addAddictionMatch = text.match(/add (?:new )?addiction\s+([a-zA-Z0-9\- ]{2,40})/);
-      if (addAddictionMatch?.[1]) {
-        const name = addAddictionMatch[1].trim();
-        addAddiction(name);
-        await speak(`Added new addiction ${name}. I will track your streaks from today.`);
-        return;
-      }
-
-      if (text.includes('break habit') || text.includes('break the habit')) {
-        let tips = 'Here are evidence-based ways to break a habit: identify the trigger, replace the routine, add friction, stack a competing habit, and track streaks with rewards.';
-        try {
-          const q = encodeURIComponent('how to break a bad habit key steps');
-          const url = `https://r.jina.ai/http://www.google.com/search?q=${q}`;
-          const res = await fetch(url, { cache: 'no-store' });
-          if (res.ok) {
-            const md = await res.text();
-            const lines = md.split('\n').filter(l => l.trim().length > 0).slice(0, 8).join(' ');
-            if (lines && lines.length > 40) tips = lines.slice(0, 300) + '...';
-          }
-        } catch (e) {
-          console.log('[GlobalVoiceAgent] web fetch tips failed', e);
-        }
-        await speak(tips);
-        return;
-      }
-
-      await speak('Hey, I am listening. Say a command like add new addiction smoking.');
-    } catch (e) {
-      console.log('[GlobalVoiceAgent] parseAndExecute error', e);
-    }
-  }, [addAddiction, speak]);
-
-  const startCommandRecognition = React.useCallback(() => {
+  const startCommandRecognitionWeb = React.useCallback(() => {
     if (!isWeb) return;
     try {
       const SR: any = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
@@ -151,10 +164,11 @@ const GlobalVoiceAgentInner = React.memo(function GlobalVoiceAgentInner() {
       rec.interimResults = false;
       rec.lang = 'en-US';
       rec.onstart = () => console.log('[GlobalVoiceAgent] Command recognition start');
-      rec.onresult = (ev: any) => {
+      rec.onresult = async (ev: any) => {
         try {
           const t = ev?.results?.[0]?.[0]?.transcript ?? '';
-          parseAndExecute(t);
+          setListeningModal(false);
+          if ((t ?? '').length > 0) await processChat(t);
         } catch (e) {
           console.log('[GlobalVoiceAgent] onresult error', e);
         }
@@ -163,17 +177,18 @@ const GlobalVoiceAgentInner = React.memo(function GlobalVoiceAgentInner() {
       rec.onend = () => {
         cmdRecognizerRef.current = null;
         if (wakeWordEnabled) {
-          setTimeout(() => startWakeRecognition(), 800);
+          setTimeout(() => startWakeRecognitionWeb(), 800);
         }
       };
       cmdRecognizerRef.current = rec;
+      setListeningModal(true);
       rec.start();
     } catch (e) {
-      console.log('[GlobalVoiceAgent] startCommandRecognition error', e);
+      console.log('[GlobalVoiceAgent] startCommandRecognitionWeb error', e);
     }
-  }, [isWeb, parseAndExecute, wakeWordEnabled]);
+  }, [isWeb, processChat, wakeWordEnabled]);
 
-  const startWakeRecognition = React.useCallback(() => {
+  const startWakeRecognitionWeb = React.useCallback(() => {
     if (!isWeb || !wakeWordEnabled) return;
     try {
       const SR: any = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
@@ -182,17 +197,17 @@ const GlobalVoiceAgentInner = React.memo(function GlobalVoiceAgentInner() {
       rec.continuous = true;
       rec.interimResults = true;
       rec.lang = 'en-US';
-      rec.onstart = () => console.log('[GlobalVoiceAgent] Wake recognition active');
+      rec.onstart = () => console.log('[GlobalVoiceAgent] Wake recognition active (web)');
       rec.onresult = (ev: any) => {
         try {
           const idx = ev.results.length - 1;
-          const transcript = ev.results[idx][0].transcript.toLowerCase();
-          const matched = transcript.includes('hey anuna') || transcript.includes('anuna');
+          const transcript: string = ev.results[idx][0].transcript?.toLowerCase?.() ?? '';
+          const matched = /\bhey\s+anuna\b/.test(transcript) || /\banuna\b/.test(transcript);
           if (matched) {
-            console.log('Hey Anuna detected');
+            console.log('[GlobalVoiceAgent] Hey Anuna detected (web)');
             dispatchFocusCoach();
             try { rec.stop(); } catch {}
-            setTimeout(() => startCommandRecognition(), 300);
+            setTimeout(() => startCommandRecognitionWeb(), 300);
           }
         } catch (e) {
           console.log('[GlobalVoiceAgent] wake onresult error', e);
@@ -201,28 +216,22 @@ const GlobalVoiceAgentInner = React.memo(function GlobalVoiceAgentInner() {
       rec.onerror = (ev: any) => console.log('[GlobalVoiceAgent] wake error', ev?.error);
       rec.onend = () => {
         wakeRecognizerRef.current = null;
-        if (wakeWordEnabled) {
-          setTimeout(() => startWakeRecognition(), 1000);
-        }
+        if (wakeWordEnabled) setTimeout(() => startWakeRecognitionWeb(), 1000);
       };
       wakeRecognizerRef.current = rec;
       rec.start();
     } catch (e) {
-      console.log('[GlobalVoiceAgent] startWakeRecognition error', e);
+      console.log('[GlobalVoiceAgent] startWakeRecognitionWeb error', e);
     }
-  }, [dispatchFocusCoach, isWeb, startCommandRecognition, wakeWordEnabled]);
+  }, [dispatchFocusCoach, isWeb, startCommandRecognitionWeb, wakeWordEnabled]);
 
   React.useEffect(() => {
     if (!isWeb) return;
     if (wakeWordEnabled) {
-      startWakeRecognition();
+      startWakeRecognitionWeb();
     } else {
-      try {
-        wakeRecognizerRef.current?.stop?.();
-      } catch {}
-      try {
-        cmdRecognizerRef.current?.stop?.();
-      } catch {}
+      try { wakeRecognizerRef.current?.stop?.(); } catch {}
+      try { cmdRecognizerRef.current?.stop?.(); } catch {}
     }
     return () => {
       try { wakeRecognizerRef.current?.stop?.(); } catch {}
@@ -230,9 +239,152 @@ const GlobalVoiceAgentInner = React.memo(function GlobalVoiceAgentInner() {
       wakeRecognizerRef.current = null;
       cmdRecognizerRef.current = null;
     };
-  }, [wakeWordEnabled, isWeb, startWakeRecognition]);
+  }, [wakeWordEnabled, isWeb, startWakeRecognitionWeb]);
 
-  return null;
+  const transcribeWithAssemblyAI = React.useCallback(async (uri: string, key: string): Promise<string> => {
+    try {
+      const fs = await import('expo-file-system');
+      const base64 = await fs.default.readAsStringAsync(uri, { encoding: fs.default.EncodingType.Base64 });
+      const uploadRes = await fetch('https://api.assemblyai.com/v2/upload', {
+        method: 'POST',
+        headers: { 'authorization': key },
+        body: (typeof atob === 'function' ? (Uint8Array.from(atob(base64), c => c.charCodeAt(0)) as any) : base64) as any,
+      } as any);
+      if (!uploadRes.ok) throw new Error('upload failed');
+      const audioUrl = await uploadRes.text();
+      const createRes = await fetch('https://api.assemblyai.com/v2/transcript', {
+        method: 'POST',
+        headers: { 'authorization': key, 'content-type': 'application/json' },
+        body: JSON.stringify({ audio_url: audioUrl }),
+      });
+      if (!createRes.ok) throw new Error('create transcript failed');
+      const job = await createRes.json();
+      const id: string = job.id as string;
+      for (let i = 0; i < 20; i++) {
+        await new Promise(r => setTimeout(r, 1500));
+        const poll = await fetch(`https://api.assemblyai.com/v2/transcript/${id}`, { headers: { 'authorization': key } });
+        const js = await poll.json();
+        if ((js as any).status === 'completed') return (js as any).text as string;
+        if ((js as any).status === 'error') throw new Error((js as any).error || 'aai error');
+      }
+      return '';
+    } catch (e) {
+      console.log('[GlobalVoiceAgent] AAI transcribe error', e);
+      return '';
+    }
+  }, []);
+
+  const transcribeAudio = React.useCallback(async (uri: string, aaiKey: string): Promise<string> => {
+    try {
+      if ((aaiKey ?? '').trim().length > 0) {
+        try {
+          const text = await transcribeWithAssemblyAI(uri, aaiKey);
+          if (text && text.length > 0) return text;
+        } catch (e) {
+          console.log('[GlobalVoiceAgent] AssemblyAI failed, fallback', e);
+        }
+      }
+      const fd = new FormData();
+      const ext = (uri.split('.').pop() ?? 'm4a');
+      fd.append('audio', { uri, name: `clip.${ext}`, type: `audio/${ext}` } as any);
+      const res = await fetch('https://toolkit.rork.com/stt/transcribe/', { method: 'POST', body: fd });
+      if (!res.ok) return '';
+      const json = await res.json();
+      const text: string = json?.text ?? '';
+      return text;
+    } catch (e) {
+      console.log('[GlobalVoiceAgent] transcribeAudio error', e);
+      return '';
+    }
+  }, [transcribeWithAssemblyAI]);
+
+  const handleFullCommandNative = React.useCallback(async (aaiKey: string) => {
+    try {
+      setBusy(true);
+      const perm = await Audio.requestPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert('Mic access needed');
+        setListeningModal(false);
+        setBusy(false);
+        return;
+      }
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
+      const rec = new Audio.Recording();
+      await rec.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY as any);
+      await rec.startAsync();
+      await new Promise(r => setTimeout(r, 8000));
+      await rec.stopAndUnloadAsync();
+      const uri = rec.getURI();
+      setListeningModal(false);
+      if (uri) {
+        const transcript = await transcribeAudio(uri, aaiKey);
+        if (transcript && transcript.length > 0) {
+          await processChat(transcript);
+        } else {
+          Alert.alert('Did not catch that');
+        }
+      }
+    } catch (e) {
+      console.log('[GlobalVoiceAgent] handleFullCommandNative error', e);
+    } finally {
+      setBusy(false);
+    }
+  }, [processChat, transcribeAudio]);
+
+  React.useEffect(() => {
+    if (isWeb || !wakeWordEnabled) return;
+    let cancelled = false;
+    cancelledRef.current = false;
+    (async () => {
+      try {
+        const perm = await Audio.requestPermissionsAsync();
+        console.log('[GlobalVoiceAgent] Mic permission (native):', perm);
+        if (!perm.granted) {
+          Alert.alert('Mic access needed');
+          return;
+        }
+        await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
+      } catch (e) {
+        console.log('[GlobalVoiceAgent] audio mode error', e);
+      }
+      while (!cancelled) {
+        try {
+          const rec = new Audio.Recording();
+          await rec.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY as any);
+          await rec.startAsync();
+          await new Promise(r => setTimeout(r, 5000));
+          await rec.stopAndUnloadAsync();
+          const uri = rec.getURI();
+          if (cancelled || !uri) break;
+          const text = await transcribeAudio(uri, assemblyAiApiKey ?? '');
+          console.log('[GlobalVoiceAgent] Wake chunk transcript:', text);
+          if (/\bhey\s*anuna\b/i.test(text) || /\banuna\b/i.test(text)) {
+            console.log('[GlobalVoiceAgent] Hey Anuna detected (native)');
+            dispatchFocusCoach();
+            setListeningModal(true);
+            await handleFullCommandNative(assemblyAiApiKey ?? '');
+          }
+        } catch (e) {
+          console.log('[GlobalVoiceAgent] wake loop error', e);
+        }
+      }
+    })();
+    return () => { cancelled = true; cancelledRef.current = true; };
+  }, [isWeb, wakeWordEnabled, assemblyAiApiKey, dispatchFocusCoach, handleFullCommandNative, transcribeAudio]);
+
+  return (
+    <>
+      <Modal visible={listeningModal} transparent animationType="fade" onRequestClose={() => setListeningModal(false)}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard} testID="anuna-listening-modal">
+            <Text style={styles.modalTitle}>Anuna is listening...</Text>
+            <ActivityIndicator color="#FF4500" />
+          </View>
+        </View>
+      </Modal>
+      {busy && <View style={styles.busyOverlay} pointerEvents="none" />}
+    </>
+  );
 });
 
 function GlobalVoiceAgent() {
@@ -320,8 +472,6 @@ export default function RootLayout() {
     console.log('[Phoenix Rise] Device is offline - data will be cached locally');
   };
 
-
-
   const clearWebCaches = React.useCallback(async () => {
     if (Platform.OS !== 'web' || typeof window === 'undefined') return;
     try {
@@ -362,7 +512,6 @@ export default function RootLayout() {
       }
       window.addEventListener('online', handleOnline);
       window.addEventListener('offline', handleOffline);
-      // Update prompt disabled temporarily
       console.log('[Phoenix Rise] PWA initialization complete');
     } catch (error) {
       console.error('[Phoenix Rise] PWA initialization failed:', error);
@@ -463,7 +612,6 @@ export default function RootLayout() {
         document.removeEventListener('visibilitychange', sub);
       }
       if (Platform.OS === 'web') {
-        // remove with references defined above
         const onOnline = () => onlineManager.setOnline(true);
         const onOffline = () => onlineManager.setOnline(false);
         window.removeEventListener('online', onOnline);
@@ -471,28 +619,6 @@ export default function RootLayout() {
       }
     };
   }, [initializePWA, clearWebCaches]);
-
-  // Disable expo-updates checks in dev; only run in production to avoid preview errors
-  React.useEffect(() => {
-    try {
-      if (process.env.NODE_ENV === 'production' && Platform.OS !== 'web') {
-        (async () => {
-          try {
-            const Updates: any = await (eval('import')('expo-updates') as Promise<any>);
-            console.log('[Updates] Checking for updates (production only)');
-            const result = await Updates.checkForUpdateAsync();
-            console.log('[Updates] isAvailable =', result?.isAvailable ?? false);
-          } catch (e) {
-            console.log('[Updates] Update check skipped/failed:', e);
-          }
-        })();
-      } else {
-        console.log('[Updates] Skipping update checks in dev mode/previews');
-      }
-    } catch (e) {
-      console.log('[Updates] Guarded check error:', e);
-    }
-  }, []);
 
   return (
     <ErrorBoundary>
@@ -510,3 +636,35 @@ export default function RootLayout() {
     </ErrorBoundary>
   );
 }
+
+const styles = StyleSheet.create({
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalCard: {
+    width: 260,
+    paddingVertical: 20,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    backgroundColor: '#0b0f14',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center',
+  },
+  modalTitle: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700' as const,
+    marginBottom: 10,
+  },
+  busyOverlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+  },
+});
