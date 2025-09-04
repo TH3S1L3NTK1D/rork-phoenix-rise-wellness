@@ -80,19 +80,6 @@ function PhoenixCoach() {
     })();
   }, []);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        if (Platform.OS !== 'web') {
-          const perm = await Audio.requestPermissionsAsync();
-          console.log('[Coach] Mic permission:', perm);
-          if (!perm.granted) Alert.alert('Grant mic access');
-        }
-      } catch (e) {
-        console.log('[Coach] request mic permission error', e);
-      }
-    })();
-  }, []);
 
 
 
@@ -172,8 +159,11 @@ function PhoenixCoach() {
     typingAnimation.setValue(0);
   };
 
+  const [outputMuted, setOutputMuted] = useState<boolean>(false);
+
   const speakWithAPI = async (text: string) => {
     try {
+      if (outputMuted) { console.log('[Coach] Output muted, skipping TTS'); return; }
       const key = (elevenLabsApiKey ?? '').trim();
       if (!key) {
         speakWithBrowser(text);
@@ -189,6 +179,7 @@ function PhoenixCoach() {
       if (!res.ok) { speakWithBrowser(text); return; }
       const arrayBuffer = await res.arrayBuffer();
       if (Platform.OS === 'web') {
+        if (outputMuted) { console.log('[Coach] Output muted, skipping web audio'); return; }
         const blob = new Blob([arrayBuffer], { type: 'audio/mpeg' });
         const url = URL.createObjectURL(blob);
         const audio = new (window as any).Audio(url);
@@ -211,6 +202,7 @@ function PhoenixCoach() {
 
   const speakWithBrowser = (text: string) => {
     try {
+      if (outputMuted) { console.log('[Coach] Output muted, skipping browser TTS'); return; }
       if (Platform.OS === 'web' && 'speechSynthesis' in window) {
         const utter = new SpeechSynthesisUtterance(text);
         try { utter.rate = Math.max(0.5, Math.min(1.5, ttsSpeed ?? 0.8)); } catch {}
@@ -795,65 +787,108 @@ function PhoenixCoach() {
 
   const handleManualMic = useCallback(async () => {
     try {
-      if ((assemblyAiApiKey ?? '').trim().length === 0) {
-        Alert.alert('Voice', 'Enter your AssemblyAI API key in Settings to use STT. Falling back to device STT.');
-        if (Platform.OS === 'web') startSpeechCaptureWeb(); else void startSpeechCaptureMobile();
+      console.log('[Coach][Mic] Button pressed');
+      const hasKey = (assemblyAiApiKey ?? '').trim().length > 0;
+      if (!hasKey) {
+        Alert.alert('Voice', 'Enter your AssemblyAI API key in Settings to use STT.');
+        console.log('[Coach][Mic] No AssemblyAI key');
         return;
       }
       const key = (assemblyAiApiKey ?? '').trim();
+
       if (Platform.OS === 'web') {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        const recorder = new MediaRecorder(stream);
-        const chunks: Blob[] = [];
-        recorder.ondataavailable = e => { if (e.data?.size) chunks.push(e.data); };
-        recorder.onstop = async () => {
-          try {
-            stream.getTracks().forEach(t => t.stop());
-            const blob = new Blob(chunks, { type: 'audio/webm' });
-            const text = await uploadToAssemblyAIAndTranscribe(key, blob);
-            if (!text) throw new Error('no-text');
-            await handleVoiceQuery(text);
-          } catch (e) {
-            console.log('[Coach] web AAI mic error', e);
-            Alert.alert('STT Error', 'Failed to transcribe. Check API key.');
-          } finally {
-            setIsListening(false);
-          }
-        };
-        recorder.start();
-        setIsListening(true);
-        setTimeout(() => { try { recorder.stop(); } catch {} }, 6000);
-      } else {
-        const perm = await Audio.requestPermissionsAsync();
-        if (!perm.granted) { Alert.alert('Grant mic access'); return; }
-        await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
-        const rec = new Audio.Recording();
-        try { await rec.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY as any); } catch {}
-        await rec.startAsync();
-        setIsListening(true);
-        setTimeout(async () => {
-          try { await rec.stopAndUnloadAsync(); } catch {}
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          console.log('[Coach][Mic][Web] Permission granted');
+          const recorder = new MediaRecorder(stream);
+          const chunks: Blob[] = [];
+          recorder.ondataavailable = e => { if (e.data?.size) chunks.push(e.data); };
+          recorder.onstart = () => { setIsListening(true); setOutputMuted(true); console.log('[Coach][Mic][Web] Recording start (muted)'); };
+          recorder.onerror = (e: any) => { console.log('[Coach][Mic][Web] Recording error', e); };
+          recorder.onstop = async () => {
+            try {
+              stream.getTracks().forEach(t => t.stop());
+              console.log('[Coach][Mic][Web] Recording stop');
+              const blob = new Blob(chunks, { type: 'audio/webm' });
+              let text = '';
+              try {
+                text = await uploadToAssemblyAIAndTranscribe(key, blob);
+              } catch (e) {
+                console.log('Audio error:', e);
+                Alert.alert('Recording failed, try again');
+              }
+              setOutputMuted(false);
+              setIsListening(false);
+              if (text && text.trim()) await handleVoiceQuery(text.trim());
+            } catch (e) {
+              console.log('Audio error:', e);
+              setOutputMuted(false);
+              setIsListening(false);
+              Alert.alert('Recording failed, try again');
+            }
+          };
+          recorder.start();
+          setTimeout(() => { try { recorder.stop(); } catch {} }, 3000);
+        } catch (e) {
+          console.log('Audio error:', e);
+          Alert.alert('Mic permission denied');
           setIsListening(false);
-          const uri = rec.getURI();
-          if (!uri) return;
-          try {
-            const text = await transcribeMobileWithAssembly(key, uri);
-            if (!text) throw new Error('no-text');
-            await handleVoiceQuery(text);
-          } catch (e) {
-            console.log('[Coach] mobile AAI mic error', e);
-            Alert.alert('STT Error', 'Transcription failed. Invalid API key?');
-          } finally {
-            try { await Audio.setAudioModeAsync({ allowsRecordingIOS: false }); } catch {}
-          }
-        }, 6000);
+        }
+        return;
       }
+
+      const perm = await Audio.requestPermissionsAsync();
+      console.log('[Coach][Mic][Mobile] Permission:', perm);
+      if (!perm.granted) {
+        console.log('Mic permission denied');
+        Alert.alert('Mic permission denied');
+        return;
+      }
+
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true, shouldDuckAndroid: true, staysActiveInBackground: false });
+      const rec = new Audio.Recording();
+      try {
+        await rec.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY as any);
+      } catch (e) { console.log('[Coach][Mic][Mobile] prepareToRecordAsync error', e); }
+
+      await rec.startAsync();
+      setIsListening(true);
+      setOutputMuted(true);
+      console.log('[Coach][Mic][Mobile] Recording start (muted)');
+
+      setTimeout(async () => {
+        try {
+          try { await rec.stopAndUnloadAsync(); } catch {}
+          const uri = rec.getURI();
+          console.log('[Coach][Mic][Mobile] Recording stop, uri:', uri);
+          setIsListening(false);
+          let text = '';
+          if (uri) {
+            try {
+              text = await transcribeMobileWithAssembly(key, uri);
+            } catch (e) {
+              console.log('Audio error:', e);
+              Alert.alert('Recording failed, try again');
+            }
+          }
+          setOutputMuted(false);
+          try { await Audio.setAudioModeAsync({ allowsRecordingIOS: false }); } catch {}
+          if (text && text.trim()) await handleVoiceQuery(text.trim());
+        } catch (e) {
+          console.log('Audio error:', e);
+          setOutputMuted(false);
+          setIsListening(false);
+          try { await Audio.setAudioModeAsync({ allowsRecordingIOS: false }); } catch {}
+          Alert.alert('Recording failed, try again');
+        }
+      }, 3000);
     } catch (e) {
-      console.log('[Coach] handleManualMic error', e);
-      Alert.alert('STT Error', 'Could not access microphone.');
+      console.log('Audio error:', e);
+      Alert.alert('Recording failed, try again');
       setIsListening(false);
+      setOutputMuted(false);
     }
-  }, [assemblyAiApiKey, startSpeechCaptureWeb, startSpeechCaptureMobile, uploadToAssemblyAIAndTranscribe, transcribeMobileWithAssembly, handleVoiceQuery]);
+  }, [assemblyAiApiKey, uploadToAssemblyAIAndTranscribe, transcribeMobileWithAssembly, handleVoiceQuery]);
 
   useEffect(() => {
     if (!wakeWordEnabled) return;
