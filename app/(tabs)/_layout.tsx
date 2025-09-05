@@ -2,7 +2,7 @@ import { Tabs, router } from "expo-router";
 import { TABS_ROUTES, TabRouteKey } from "@/constants/routes";
 import { Home, UtensilsCrossed, Plus, MoreHorizontal, TrendingUp, ChevronRight } from "lucide-react-native";
 import React, { memo, useCallback, useMemo, useRef, useState, type ReactNode } from "react";
-import { Dimensions, Platform, StyleSheet, Text, Pressable, View, LayoutChangeEvent } from "react-native";
+import { Dimensions, Platform, StyleSheet, Text, Pressable, View, LayoutChangeEvent, BackHandler } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
 
@@ -101,6 +101,20 @@ const TabBarItem = memo(function TabBarItem({
 const CustomTabBar = memo(function CustomTabBar({ state }: any) {
   const [openPanel, setOpenPanel] = useState<null | PanelKind>(null);
   const [panelAnchor, setPanelAnchor] = useState<Measured | null>(null);
+
+  React.useEffect(() => {
+    const onBack = () => {
+      if (openPanel) {
+        setOpenPanel(null);
+        return true;
+      }
+      return false;
+    };
+    const sub = BackHandler.addEventListener('hardwareBackPress', onBack);
+    return () => {
+      sub.remove();
+    };
+  }, [openPanel]);
 
   const triggerRefs = {
     track: useRef<View | null>(null),
@@ -431,6 +445,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "600",
     marginTop: 2,
+    maxWidth: 80,
   },
   centerButton: {
     position: "relative",
