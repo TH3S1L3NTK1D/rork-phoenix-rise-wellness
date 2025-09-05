@@ -930,6 +930,18 @@ function RoutinesScreenInner() {
   );
 }
 
+export default function RoutinesScreen() {
+  const [key, setKey] = React.useState<number>(0);
+  const onRetry = React.useCallback(() => setKey((k) => k + 1), []);
+  return (
+    <ScreenErrorBoundary onRetry={onRetry}>
+      <View style={{ flex: 1 }} key={key}>
+        <RoutinesScreenInner />
+      </View>
+    </ScreenErrorBoundary>
+  );
+}
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
