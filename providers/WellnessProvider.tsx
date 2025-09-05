@@ -1119,7 +1119,7 @@ export const [WellnessProvider, useWellness] = createContextHook(() => {
       setIsWakeListening(false);
       try { await Audio.setAudioModeAsync({ allowsRecordingIOS: false }); } catch {}
     }
-  }, [assemblyAiApiKey, isMicEnabled, isWakeListening, wakeWordEnabled, detectWake]);
+  }, [assemblyAiApiKey, isMicEnabled, wakeWordEnabled, detectWake]);
 
   useEffect(() => {
     if (wakeWordEnabled && !isMicEnabled) {
