@@ -151,17 +151,20 @@ const GlobalVoiceAgentInner = React.memo(function GlobalVoiceAgentInner() {
 
   const chatMutation = trpc.ai.chat.useMutation();
 
-  const processChat = React.useCallback(async (text: string) => {
-    try {
-      console.log('[GlobalVoiceAgent] Sending chat:', text);
-      const res = await chatMutation.mutateAsync({ messages: [{ role: 'user', content: text }] as any });
-      const completion: string = (res as any)?.completion ?? '';
-      const reply = completion && completion.length > 0 ? completion : 'Anuna is thinking...';
-      await speak(reply);
-    } catch (e) {
-      console.log('[GlobalVoiceAgent] chat error', e);
-      await speak('Anuna is thinking...');
-    }
+  const processChatRef = React.useRef<(t: string) => Promise<void>>(async () => {});
+  React.useEffect(() => {
+    processChatRef.current = async (text: string) => {
+      try {
+        console.log('[GlobalVoiceAgent] Sending chat:', text);
+        const res = await chatMutation.mutateAsync({ messages: [{ role: 'user', content: text }] as any });
+        const completion: string = (res as any)?.completion ?? '';
+        const reply = completion && completion.length > 0 ? completion : 'Anuna is thinking...';
+        await speak(reply);
+      } catch (e) {
+        console.log('[GlobalVoiceAgent] chat error', e);
+        await speak('Anuna is thinking...');
+      }
+    };
   }, [chatMutation, speak]);
 
   const dispatchFocusCoach = React.useCallback(() => {
@@ -172,10 +175,13 @@ const GlobalVoiceAgentInner = React.memo(function GlobalVoiceAgentInner() {
     } catch (e) {
       console.log('[GlobalVoiceAgent] dispatchFocusCoach error', e);
     }
-  }, [isWeb]);
+  }, []);
+
+  const wakeWordEnabledRef = React.useRef<boolean>(false);
+  React.useEffect(() => { wakeWordEnabledRef.current = !!wakeWordEnabled; }, [wakeWordEnabled]);
 
   const startCommandRecognitionWeb = React.useCallback(() => {
-    if (!isWeb) return;
+    if (Platform.OS !== 'web') return;
     try {
       const SR: any = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
       if (!SR) return;
@@ -188,7 +194,7 @@ const GlobalVoiceAgentInner = React.memo(function GlobalVoiceAgentInner() {
         try {
           const t = ev?.results?.[0]?.[0]?.transcript ?? '';
           setListeningModal(false);
-          if ((t ?? '').length > 0) await processChat(t);
+          if ((t ?? '').length > 0) await processChatRef.current(t);
         } catch (e) {
           console.log('[GlobalVoiceAgent] onresult error', e);
         }
@@ -196,7 +202,7 @@ const GlobalVoiceAgentInner = React.memo(function GlobalVoiceAgentInner() {
       rec.onerror = (ev: any) => console.log('[GlobalVoiceAgent] command error', ev?.error);
       rec.onend = () => {
         cmdRecognizerRef.current = null;
-        if (wakeWordEnabled) {
+        if (wakeWordEnabledRef.current) {
           setTimeout(() => startWakeRecognitionWeb(), 800);
         }
       };
@@ -206,10 +212,10 @@ const GlobalVoiceAgentInner = React.memo(function GlobalVoiceAgentInner() {
     } catch (e) {
       console.log('[GlobalVoiceAgent] startCommandRecognitionWeb error', e);
     }
-  }, [isWeb, processChat, wakeWordEnabled]);
+  }, []);
 
   const startWakeRecognitionWeb = React.useCallback(() => {
-    if (!isWeb || !wakeWordEnabled) return;
+    if (Platform.OS !== 'web' || !wakeWordEnabledRef.current) return;
     try {
       const SR: any = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
       if (!SR) return;
@@ -236,17 +242,17 @@ const GlobalVoiceAgentInner = React.memo(function GlobalVoiceAgentInner() {
       rec.onerror = (ev: any) => console.log('[GlobalVoiceAgent] wake error', ev?.error);
       rec.onend = () => {
         wakeRecognizerRef.current = null;
-        if (wakeWordEnabled) setTimeout(() => startWakeRecognitionWeb(), 1000);
+        if (wakeWordEnabledRef.current) setTimeout(() => startWakeRecognitionWeb(), 1000);
       };
       wakeRecognizerRef.current = rec;
       rec.start();
     } catch (e) {
       console.log('[GlobalVoiceAgent] startWakeRecognitionWeb error', e);
     }
-  }, [dispatchFocusCoach, isWeb, startCommandRecognitionWeb, wakeWordEnabled]);
+  }, []);
 
   React.useEffect(() => {
-    if (!isWeb) return;
+    if (Platform.OS !== 'web') return;
     if (wakeWordEnabled) {
       startWakeRecognitionWeb();
     } else {
@@ -259,7 +265,7 @@ const GlobalVoiceAgentInner = React.memo(function GlobalVoiceAgentInner() {
       wakeRecognizerRef.current = null;
       cmdRecognizerRef.current = null;
     };
-  }, [wakeWordEnabled, isWeb, startWakeRecognitionWeb]);
+  }, [wakeWordEnabled]);
 
   const transcribeWithAssemblyAI = React.useCallback(async (uri: string, key: string): Promise<string> => {
     try {
@@ -344,7 +350,7 @@ const GlobalVoiceAgentInner = React.memo(function GlobalVoiceAgentInner() {
       if (uri) {
         const transcript = await transcribeAudio(uri, aaiKey);
         if (transcript && transcript.length > 0) {
-          await processChat(transcript);
+          await processChatRef.current(transcript);
         } else {
           Alert.alert('Did not catch that');
         }
@@ -354,7 +360,7 @@ const GlobalVoiceAgentInner = React.memo(function GlobalVoiceAgentInner() {
     } finally {
       setBusy(false);
     }
-  }, [processChat, transcribeAudio, setGlobalAudioEnabled]);
+  }, [transcribeAudio, setGlobalAudioEnabled]);
 
   React.useEffect(() => {
     if (isWeb || !wakeWordEnabled) return;
@@ -692,6 +698,8 @@ export default function RootLayout() {
       const onOffline = () => onlineManager.setOnline(false);
       window.addEventListener('online', onOnline);
       window.addEventListener('offline', onOffline);
+      (global as any).__phoenix_onOnline = onOnline;
+      (global as any).__phoenix_onOffline = onOffline;
     }
 
     const globalHandler = (global as any)?.ErrorUtils?.getGlobalHandler?.();
@@ -705,10 +713,12 @@ export default function RootLayout() {
         document.removeEventListener('visibilitychange', sub);
       }
       if (Platform.OS === 'web') {
-        const onOnline = () => onlineManager.setOnline(true);
-        const onOffline = () => onlineManager.setOnline(false);
-        window.removeEventListener('online', onOnline);
-        window.removeEventListener('offline', onOffline);
+        const onOnline = (global as any).__phoenix_onOnline;
+        const onOffline = (global as any).__phoenix_onOffline;
+        if (onOnline) window.removeEventListener('online', onOnline);
+        if (onOffline) window.removeEventListener('offline', onOffline);
+        (global as any).__phoenix_onOnline = undefined;
+        (global as any).__phoenix_onOffline = undefined;
       }
     };
   }, [initializePWA, clearWebCaches]);
