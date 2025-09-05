@@ -30,6 +30,8 @@ interface UserProfile {
 
 const PROFILE_STORAGE_KEY = "@phoenix_user_profile";
 
+const EMERGENCY_DISABLE_AUDIO = true as const;
+
 function SettingsScreen() {
   const { phoenixPoints, meals, extendedMeals, goals, journalEntries, supplements, addictions, currentTheme, updateTheme, resetToPhoenixTheme, elevenLabsApiKey, updateElevenLabsApiKey, assemblyAiApiKey, updateAssemblyAiApiKey, openWeatherApiKey, updateOpenWeatherApiKey, wakeWordEnabled, updateWakeWordEnabled, soundEffectsEnabled, backgroundMusicEnabled, autoReadResponsesEnabled, voiceModeEnabled, emotionalIntelligenceEnabled, ttsSpeed, updateSoundEffectsEnabled, updateBackgroundMusicEnabled, updateAutoReadResponsesEnabled, updateVoiceModeEnabled, updateEmotionalIntelligenceEnabled, updateTtsSpeed } = useWellness();
   const [clonedVoicePath, setClonedVoicePath] = useState<string>("");
@@ -124,23 +126,31 @@ function SettingsScreen() {
   }, []);
 
   useEffect(() => {
-    setTempProfile(profile);
+    if (tempProfile !== profile) {
+      setTempProfile(profile);
+    }
   }, [profile]);
 
   useEffect(() => {
-    setTempApiKey(elevenLabsApiKeyLocal || elevenLabsApiKey || '');
+    const next = elevenLabsApiKeyLocal || elevenLabsApiKey || '';
+    if (tempApiKey !== next) setTempApiKey(next);
   }, [elevenLabsApiKeyLocal, elevenLabsApiKey]);
 
   useEffect(() => {
-    setTempColors(customColors);
+    if (tempColors !== customColors) {
+      setTempColors(customColors);
+    }
   }, [customColors]);
 
   useEffect(() => {
-    setOpenWeatherApiKeyLocal(openWeatherApiKey || '');
+    const next = openWeatherApiKey || '';
+    if (openWeatherApiKeyLocal !== next) setOpenWeatherApiKeyLocal(next);
   }, [openWeatherApiKey]);
 
   useEffect(() => {
-    setCustomColors(currentTheme.colors);
+    if (customColors !== currentTheme.colors) {
+      setCustomColors(currentTheme.colors);
+    }
   }, [currentTheme]);
 
   useEffect(() => {
@@ -193,6 +203,7 @@ function SettingsScreen() {
   }, [audioStream, recordingTimer, playingAudio]);
 
   useEffect(() => {
+    if (EMERGENCY_DISABLE_AUDIO) return;
     const isWeb = Platform.select({ web: true, default: false }) as boolean;
     if (!isWeb) return;
 
@@ -476,6 +487,7 @@ function SettingsScreen() {
   };
 
   const startRecording = async () => {
+    if (EMERGENCY_DISABLE_AUDIO) { Alert.alert('Audio Disabled', 'Recording is temporarily disabled.'); return; }
     try {
       if (Platform.OS === 'web') {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -547,6 +559,7 @@ function SettingsScreen() {
   };
 
   const playRecording = (sampleIndex: number) => {
+    if (EMERGENCY_DISABLE_AUDIO) { Alert.alert('Audio Disabled', 'Playback is temporarily disabled.'); return; }
     const audioData = recordedSamples[sampleIndex];
     if (!audioData) {
       Alert.alert('Info', 'No recording found for this sample');
@@ -714,6 +727,7 @@ function SettingsScreen() {
   };
 
   const testClonedVoice = async () => {
+    if (EMERGENCY_DISABLE_AUDIO) { Alert.alert('Audio Disabled', 'Voice test is temporarily disabled.'); return; }
     try {
       const key = (elevenLabsApiKey || '').trim();
       if (!key) {
