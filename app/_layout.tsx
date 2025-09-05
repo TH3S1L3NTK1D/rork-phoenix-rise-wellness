@@ -10,8 +10,10 @@ import { pwaManager } from "@/utils/pwa";
 import { offlineStorage } from "@/utils/offlineStorage";
 import PWAInstallPrompt from "@/components/PWAInstallPrompt";
 import { trpc, trpcClient } from "@/lib/trpc";
-import { Audio } from 'expo-av';
+// import { Audio } from 'expo-av';
 import { Mic } from 'lucide-react-native';
+
+const EMERGENCY_DISABLE_AUDIO = true as const;
 
 const APP_VERSION = '1.0.3';
 SplashScreen.preventAutoHideAsync();
@@ -50,7 +52,13 @@ function RootLayoutNav() {
 const ANUNA_VOICE_ID = 'ahvd0TWxmVC87GTyJn2P' as const;
 
 const GlobalVoiceAgentInner = React.memo(function GlobalVoiceAgentInner() {
+  return null as any;
+});
+
+/* ORIGINAL DISABLED FOR EMERGENCY
+const GlobalVoiceAgentInner = React.memo(function GlobalVoiceAgentInner() {
   const { wakeWordEnabled, elevenLabsApiKey, assemblyAiApiKey, ttsSpeed } = useWellness();
+  if (EMERGENCY_DISABLE_AUDIO) return null as any;
   const wakeRecognizerRef = React.useRef<any>(null);
   const cmdRecognizerRef = React.useRef<any>(null);
   const isWeb = Platform.OS === 'web';
@@ -471,6 +479,7 @@ const GlobalVoiceAgentInner = React.memo(function GlobalVoiceAgentInner() {
     };
   }, [isWeb, wakeWordEnabled, assemblyAiApiKey, dispatchFocusCoach, handleFullCommandNative, transcribeAudio, setGlobalAudioEnabled]);
 
+  if (EMERGENCY_DISABLE_AUDIO) return null as any;
   return (
     <>
       <Modal visible={listeningModal} transparent animationType="fade" onRequestClose={() => setListeningModal(false)}>
@@ -485,6 +494,7 @@ const GlobalVoiceAgentInner = React.memo(function GlobalVoiceAgentInner() {
     </>
   );
 });
+*/
 
 function GlobalVoiceAgent() {
   return (
@@ -731,8 +741,9 @@ export default function RootLayout() {
             <WellnessProvider>
               <RootLayoutNav />
               {Platform.OS === 'web' && <PWAInstallPrompt />}
-              <GlobalVoiceAgent />
-              <HeaderMicIndicator />
+              {/* Audio disabled */}
+              {EMERGENCY_DISABLE_AUDIO ? null : <GlobalVoiceAgent />}
+              {EMERGENCY_DISABLE_AUDIO ? null : <HeaderMicIndicator />}
             </WellnessProvider>
           </GestureHandlerRootView>
         </QueryClientProvider>

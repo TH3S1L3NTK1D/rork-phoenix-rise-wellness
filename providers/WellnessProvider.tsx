@@ -2,8 +2,11 @@ import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import createContextHook from "@nkzw/create-context-hook";
 import { Platform, InteractionManager, Alert, AppState, AppStateStatus } from "react-native";
-import { Audio } from 'expo-av';
+// import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
+
+const EMERGENCY_DISABLE_AUDIO = true as const;
+const Audio: any = {};
 
 interface Meal {
   id: string;
@@ -527,7 +530,7 @@ export const [WellnessProvider, useWellness] = createContextHook(() => {
   const [isMicEnabled, setIsMicEnabled] = useState<boolean>(false);
   const [isWakeListening, setIsWakeListening] = useState<boolean>(false);
 
-  const recordingRef = useRef<Audio.Recording | null>(null);
+  const recordingRef = useRef<any>(null);
   const webRecognitionRef = useRef<any>(null);
   const webStreamRef = useRef<MediaStream | null>(null);
   const wakeLoopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -966,7 +969,7 @@ export const [WellnessProvider, useWellness] = createContextHook(() => {
       webStreamRef.current = null;
     } else {
       try {
-        const rec = recordingRef.current as Audio.Recording | null;
+        const rec = recordingRef.current as any;
         if (rec) {
           try { await rec.stopAndUnloadAsync(); } catch {}
         }
@@ -1816,7 +1819,7 @@ export const [WellnessProvider, useWellness] = createContextHook(() => {
     elevenLabsApiKey: data.elevenLabsApiKey ?? elevenLabsApiKey,
     assemblyAiApiKey: data.assemblyAiApiKey ?? assemblyAiApiKey,
     openWeatherApiKey: data.openWeatherApiKey ?? openWeatherApiKey,
-    wakeWordEnabled: data.wakeWordEnabled ?? wakeWordEnabled,
+    wakeWordEnabled: false,
     soundEffectsEnabled: data.soundEffectsEnabled ?? soundEffectsEnabled,
     backgroundMusicEnabled: data.backgroundMusicEnabled ?? backgroundMusicEnabled,
     autoReadResponsesEnabled: data.autoReadResponsesEnabled ?? autoReadResponsesEnabled,
@@ -1825,10 +1828,10 @@ export const [WellnessProvider, useWellness] = createContextHook(() => {
     ttsSpeed: data.ttsSpeed ?? ttsSpeed,
     
     // Voice / Wake word state
-    isWakeListening,
-    isMicEnabled,
-    startWakeWord,
-    stopWakeWord,
+    isWakeListening: false,
+    isMicEnabled: false,
+    startWakeWord: async () => { console.log('[WellnessProvider] startWakeWord noop (EMERGENCY)'); },
+    stopWakeWord: async () => { console.log('[WellnessProvider] stopWakeWord noop (EMERGENCY)'); },
 
     // Updaters
     updateElevenLabsApiKey,
