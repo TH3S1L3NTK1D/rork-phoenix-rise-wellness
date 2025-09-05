@@ -519,7 +519,7 @@ export const [WellnessProvider, useWellness] = createContextHook(() => {
   const [isLoading, setIsLoading] = useState(true);
   const [elevenLabsApiKey, setElevenKeyState] = useState<string>("");
   const [assemblyAiApiKey, setAssemblyKeyState] = useState<string>("");
-  const [wakeWordEnabled, setWakeWordEnabledState] = useState<boolean>(true);
+  const [wakeWordEnabled, setWakeWordEnabledState] = useState<boolean>(false);
   const [soundEffectsEnabled, setSfxEnabled] = useState<boolean>(true);
   const [backgroundMusicEnabled, setBgmEnabled] = useState<boolean>(true);
   const [autoReadResponsesEnabled, setAutoReadEnabled] = useState<boolean>(true);
@@ -756,6 +756,9 @@ export const [WellnessProvider, useWellness] = createContextHook(() => {
 
   // Ensure wake word default and request mic early + hard stop of any dangling audio session
   useEffect(() => {
+    if (EMERGENCY_DISABLE_AUDIO) {
+      return () => {};
+    }
     (async () => {
       try {
         let stored = await AsyncStorage.getItem(WAKE_WORD_KEY);
@@ -1122,6 +1125,9 @@ export const [WellnessProvider, useWellness] = createContextHook(() => {
   }, [assemblyAiApiKey, isMicEnabled, wakeWordEnabled, detectWake]);
 
   useEffect(() => {
+    if (EMERGENCY_DISABLE_AUDIO) {
+      return () => {};
+    }
     if (wakeWordEnabled && !isMicEnabled) {
       void startWakeWord();
     } else {
